@@ -1,0 +1,5 @@
+"ID","name","versionNumber","contentType","dataFileSizeBytes","createdBy","createdOn","modifiedBy","modifiedOn","parentId","synapseURL","dataFileMD5Hex"
+"syn2853604","DREAM3_InSilicoChallenge_Description.doc","1","application/msword","26920","375805","1416393287220","375805","1416393287220","syn2853597","https://www.synapse.org/#!Synapse:syn2853604.1","3a5825550fde741f415632d6f218d5d3"
+"syn2853603","InSilicoSize10.zip","1","application/x-zip","53456","375805","1416393283165","375805","1416393283165","syn2853597","https://www.synapse.org/#!Synapse:syn2853603.1","fcd55bf97d00db26f2b2c090dd3d4e29"
+"syn2853602","InSilicoSize50.zip","1","application/x-zip","1305918","375805","1416393280072","375805","1416393280072","syn2853597","https://www.synapse.org/#!Synapse:syn2853602.1","50c1c21b236790ad658bd9847a8e1cc6"
+"syn2853601","InSilicoSize100.zip","1","application/x-zip","5138391","375805","1416393275118","375805","1416393275118","syn2853597","https://www.synapse.org/#!Synapse:syn2853601.1","146dce95609ed446e3e7711ead4d3618"
