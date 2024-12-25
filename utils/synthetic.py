@@ -164,8 +164,6 @@ def simulate_er_one_lag(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0
                     i_func = np.random.randint(n_funcs)%n_funcs
                     X[i, t] += function(function_names[i_func])(X[j, t-lag])
     elif isinstance(lag, np.ndarray):  # (p,p)
-        print('lag: ')
-        print(lag)
         X[:, :np.max(lag)] = errors[:, :np.max(lag)]
         parents = {i: np.where(GC[i, :] == 1)[0] for i in range(p)}
         n_noise = len(noise_names)

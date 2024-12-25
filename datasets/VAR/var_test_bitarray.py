@@ -22,12 +22,14 @@ n_nodes = 10
 n_ts = 1000
 patch_size = 3
 n_patches = n_ts-patch_size+1
-lag_max = 10  # to adjust
-# lag_max = int(0.1*n_ts)  # to adjust
-multi_lags = [np.random.randint(0, lag_max, size=(n_nodes,n_nodes), dtype=int) for _ in range(5)]
+# lag_max = 10  # to adjust
+lag_max = int(0.1*n_ts)  # to adjust
+groups = 10
 
-
-for lag in multi_lags:  # different lags among pairs
+for lag_divide in range(1,groups+1):  # different lags among pairs
+    # lag[i][j] is the lag from j to i
+    lag = np.random.randint(0, int(lag_max/groups*lag_divide), size=(n_nodes,n_nodes), dtype=int)
+    print(lag)
 # for lag in [3,4,5,6,7]:  # same lag for all pairs
     perf = []
     execute_times = []
@@ -56,7 +58,7 @@ for lag in multi_lags:  # different lags among pairs
             for dt in range(0, n_patches):
                 offset = dt*2
                 need_len = (n_patches-dt)*2  # 0s in [0:dt*2] stem from right shift; 0s after dt*2 stem from trend encoding
-                xor_int = itrend[-need_len:] ^ jtrend[:need_len]
+                xor_int = itrend[-need_len:] ^ jtrend[:need_len]  # j->i
                 # 11->2 opposite 01->1 non 00->0 same
                 correlated_signs = [int(xor_int[i])+int(xor_int[i+1]) for i in range(0, need_len, 2)]
                 if dt<lag_max:
@@ -64,11 +66,14 @@ for lag in multi_lags:  # different lags among pairs
                     signs_1[dt][i][j] = correlated_signs.count(1)/len(correlated_signs)
                     signs_2[dt][i][j] = correlated_signs.count(2)/len(correlated_signs)
         
+        signs = np.maximum(signs_0, signs_2)
+        
         if isinstance(lag, int):
             nlags = np.zeros(n_nodes, dtype=int)
             ncandidates = np.zeros(n_nodes,dtype=float)
             for i in range(n_nodes):
-                candidate = [np.max(signs_0[dt,:,i]) for dt in range(lag_max)]
+                candidate = [np.max(signs[dt,:,i]) for dt in range(lag_max)]
+                # candidate = [np.max(signs_0[dt,:,i]) for dt in range(lag_max)]
                 nlags[i] = np.argmax(candidate)  # optimal time lag
                 ncandidates[i] = np.max(candidate)  # max 0 ratio
             # select top k% candidates and their dts, prune the rest
@@ -77,10 +82,9 @@ for lag in multi_lags:  # different lags among pairs
             top_indices = np.argsort(ncandidates)[-int(n_top):]  # in ncandidates
             # top_values = ncandidates[top_indices]
             top_lags = nlags[top_indices]
-            t_min = np.min(top_lags)
-            t_max = np.max(top_lags)
         elif isinstance(lag, np.ndarray):
-            candidate = np.transpose(signs_0, (1,2,0))
+            candidate = np.transpose(signs, (1,2,0))
+            # candidate = np.transpose(signs_0, (1,2,0))
             nlags = np.argmax(candidate, axis=2)
             ncandidates = np.max(candidate, axis=2)
             k = 0.5
@@ -89,22 +93,26 @@ for lag in multi_lags:  # different lags among pairs
             # top_indices = top_indices[np.argsort(ncandidates.flatten()[top_indices])]
             top_indices = np.unravel_index(top_indices, ncandidates.shape)
             top_indices = np.transpose(top_indices)  # [[index0, index1],...]
-            top_lags = nlags[top_indices[:,0],top_indices[:,1]]
-            t_min = np.min(top_lags)
-            t_max = np.max(top_lags)
+
         
         # use raw array
         time_start = time.perf_counter()
         # graph  = pcmci_raw(data)
         # use patch array
-        graph = pcmci(data_bit,nlags=nlags,t_min=t_min,t_max=t_max)
+        graph = pcmci(data_bit,nlags=nlags, top_indices=top_indices)
         time_end = time.perf_counter()
         execute_times.append(time_end-time_start)
         perf.append(compare_graphs(GC, graph))  # tpr, fdr
-    print("Means and standard deviations for TPR, FDR and AUC with", lag, "time interval")
-    print(np.mean(np.reshape(perf, (-1, 3)), axis=0), np.std(np.reshape(perf, (-1, 3)), axis=0))
-    print("Means and standard deviations for execution time with", lag, "time interval")
-    print(np.mean(execute_times), np.std(execute_times))
+    if isinstance(lag, int):
+        print("Means and standard deviations for TPR, FDR and AUC with", lag, "time interval")
+        print(np.mean(np.reshape(perf, (-1, 3)), axis=0), np.std(np.reshape(perf, (-1, 3)), axis=0))
+        print("Means and standard deviations for execution time with", lag, "time interval")
+        print(np.mean(execute_times), np.std(execute_times))
+    elif isinstance(lag, np.ndarray):
+        print("Means and standard deviations for TPR, FDR and AUC with lag range in ", int(lag_max/groups*lag_divide), "time interval")
+        print(np.mean(np.reshape(perf, (-1, 3)), axis=0), np.std(np.reshape(perf, (-1, 3)), axis=0))
+        print("Means and standard deviations for execution time with lag range in ", int(lag_max/groups*lag_divide), "time interval")
+        print(np.mean(execute_times), np.std(execute_times))
         
 
 
