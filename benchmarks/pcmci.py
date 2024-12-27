@@ -15,7 +15,7 @@ def pcmci(data, nlags=None, top_indices=None):
         if nlags.ndim==1:  # same lags for all pairs of nodes
             t_max = np.max(nlags[top_indices])
             t_min = np.min(nlags[top_indices])
-            print('t_min, t_max ', t_min, t_max)
+            # print('t_min, t_max ', t_min, t_max)
             results = pcmci.run_pcmci(tau_min=t_min, tau_max=t_max, pc_alpha=None)
             q_matrix = pcmci.get_corrected_pvalues(p_matrix=results["p_matrix"], fdr_method="fdr_bh")
             q_matrix = (q_matrix < 0.05) * 1  # add 00
@@ -28,7 +28,7 @@ def pcmci(data, nlags=None, top_indices=None):
         elif nlags.ndim==2:  # different lags for different pairs of nodes
             t_max = np.max(nlags[top_indices[:,0], top_indices[:,1]])
             t_min = np.min(nlags[top_indices[:,0], top_indices[:,1]])
-            print('t_min, t_max ', t_min, t_max)
+            # print('t_min, t_max ', t_min, t_max)
             results = pcmci.run_pcmci(tau_min=t_min, tau_max=t_max, pc_alpha=None)
             q_matrix = pcmci.get_corrected_pvalues(p_matrix=results["p_matrix"], fdr_method="fdr_bh")
             q_matrix = (q_matrix < 0.05) * 1  # add 00

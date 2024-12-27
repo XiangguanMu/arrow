@@ -1,1 +1,4 @@
 results/
+code/draw*
+code/dream*
+code/simulate_nonlinear.py
