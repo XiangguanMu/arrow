@@ -347,3 +347,15 @@ def compare_graphs(true_graph, estimated_graph):
     AUC = roc_auc_score(true_graph.flatten(), estimated_graph.flatten())
 
     return tpr, fdr, AUC
+
+
+def compare_graphs_lag(true_graph, true_graph_lag, estimated_graph_lag):
+    """
+    Compute the ratio of all true edges w./w.o. their true lags are detected
+    """
+    num_edges = len(true_graph[np.where(true_graph != 0.0)])
+    true_idxs = np.nonzero(true_graph)
+    estimated_edges = np.array([true_graph_lag[true_idxs[0][i]][true_idxs[1][i]]==estimated_graph_lag[true_idxs[0][i]][true_idxs[1][i]] for i in range(num_edges)])
+    num_edges_correct_estimated = np.sum(estimated_edges)
+    return num_edges_correct_estimated/num_edges
+    
