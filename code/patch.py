@@ -29,30 +29,32 @@ def estimate_lags(data, patch_size, lag, lag_max):
     for i in range(n_nodes):
         _data = data[:,i]
         for j in range(n_patches):
+            patch = _data[j:j+patch_size]
             bit0, bit1 = _data[j+1]-_data[j]>0, _data[j+2]-_data[j+1]>0
             trends[i].extend([bit0, bit1])
             data_bit[j][i] = bit0*2+bit1  # 00->0 01->1 10->2 11->3, 4 bins
         pair_list = list(ipmt(range(n_nodes), 2))
+        # pair_list = [p for p in pair_list if p[0]!=p[1]]
         signs_0 = np.zeros((lag_max, n_nodes, n_nodes))
         signs_1 = np.zeros((lag_max, n_nodes, n_nodes))
         signs_2 = np.zeros((lag_max, n_nodes, n_nodes))
-        for pmt in pair_list:
-            i, itrend = pmt[0], trends[pmt[0]]
-            j, jtrend = pmt[1], trends[pmt[1]]
-            max_lag_ij = 0
-            # offset: iterate over [0, n_patches-1]
-            # right offset will not be affected by missing leading zero or non-cyclic rolling
-            for dt in range(0, n_patches):
-                offset = dt*2
-                need_len = (n_patches-dt)*2  # 0s in [0:dt*2] stem from right shift; 0s after dt*2 stem from trend encoding
-                xor_int = itrend[-need_len:] ^ jtrend[:need_len]  # j->i
-                # 11->2 opposite 01->1 non 00->0 same
-                correlated_signs = [int(xor_int[i])+int(xor_int[i+1]) for i in range(0, need_len, 2)]
-                if dt<lag_max:
-                    signs_0[dt][i][j] = correlated_signs.count(0)/len(correlated_signs)
-                    signs_1[dt][i][j] = correlated_signs.count(1)/len(correlated_signs)
-                    signs_2[dt][i][j] = correlated_signs.count(2)/len(correlated_signs)
-        
+    for pmt in pair_list:
+        i, itrend = pmt[0], trends[pmt[0]]
+        j, jtrend = pmt[1], trends[pmt[1]]
+        max_lag_ij = 0
+        # offset: iterate over [0, n_patches-1]
+        # right offset will not be affected by missing leading zero or non-cyclic rolling
+        for dt in range(0, n_patches):
+            offset = dt*2
+            need_len = (n_patches-dt)*2  # 0s in [0:dt*2] stem from right shift; 0s after dt*2 stem from trend encoding
+            xor_int = itrend[-need_len:] ^ jtrend[:need_len]  # j->i
+            # 11->2 opposite 01->1 non 00->0 same
+            correlated_signs = [int(xor_int[i])+int(xor_int[i+1]) for i in range(0, need_len, 2)]
+            if dt<lag_max:
+                signs_0[dt][i][j] = correlated_signs.count(0)/len(correlated_signs)
+                signs_1[dt][i][j] = correlated_signs.count(1)/len(correlated_signs)
+                signs_2[dt][i][j] = correlated_signs.count(2)/len(correlated_signs)
+    
         signs = np.maximum(signs_0, signs_2)
         
         candidate = np.transpose(signs, (1,2,0))
@@ -65,4 +67,5 @@ def estimate_lags(data, patch_size, lag, lag_max):
         top_indices = np.transpose(top_indices)  # [[index0, index1],...]
         top_lags = np.zeros_like(nlags)
         top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
+    return data_bit, nlags, top_indices
 
