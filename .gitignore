@@ -2,3 +2,5 @@ results/
 code/draw*
 code/dream*
 code/simulate_nonlinear.py
+*.pyc
+*/__pycache__/*
