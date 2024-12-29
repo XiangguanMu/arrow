@@ -33,9 +33,12 @@ def pcmci(data, nlags=None, top_indices=None):
             q_matrix = pcmci.get_corrected_pvalues(p_matrix=results["p_matrix"], fdr_method="fdr_bh")
             q_matrix = (q_matrix < 0.05) * 1  # add 00
             n_nodes = data.shape[1]
+            valid_mask = nlags < q_matrix.shape[2]
             results = np.zeros((n_nodes, n_nodes))
-            rows, cols = top_indices[:,0], top_indices[:,1]
-            results[rows, cols] = q_matrix[cols, rows, nlags[rows, cols]]
+            rows, cols = np.where(valid_mask)
+            results[rows, cols] = q_matrix[cols, rows, nlags[rows,cols]]
+            # rows, cols = top_indices[:,0], top_indices[:,1]
+            # results[rows, cols] = q_matrix[cols, rows, nlags[rows, cols]]
             return results
             
     
