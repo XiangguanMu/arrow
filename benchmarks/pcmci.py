@@ -18,6 +18,7 @@ def pcmci(data, nlags=None, top_indices=None, use_raw=False):
         results = np.zeros((n_nodes, n_nodes))
         sums = np.sum(q_matrix, axis=2).transpose()
         results[sums>0] = 1
+        return results
 
     if nlags is None:
         results = pcmci.run_pcmci(tau_max=5, pc_alpha=None)
