@@ -10,7 +10,18 @@ def pcmci(data, nlags=None, top_indices=None, use_raw=False):
     cond_ind_test = ParCorr()
     pcmci = PCMCI(dataframe=dataframe, cond_ind_test=cond_ind_test)
     if use_raw == True:
-        pass
+        lag_max = int(0.1*data.shape[0])
+        results = pcmci.run_pcmci(tau_max=lag_max, pc_alpha=None)
+        q_matrix = pcmci.get_corrected_pvalues(p_matrix=results["p_matrix"], fdr_method="fdr_bh")
+        q_matrix = (q_matrix < 0.05) * 1  # add 00
+        # iterate over all tau to get the best result
+        # return columns with the most 1s
+        n_nodes = data.shape[1]
+        nlags = [0]*n_nodes
+        for i in range(n_nodes):
+            nlags[i] = np.argmax([np.sum([q_matrix[i,:,t]]) for t in range(lag_max+1)])
+        estimated_graph = np.transpose(q_matrix[np.arange(n_nodes), :, nlags])
+        return estimated_graph
     if nlags is None:
         results = pcmci.run_pcmci(tau_max=5, pc_alpha=None)
     elif isinstance(nlags, np.ndarray):

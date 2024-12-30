@@ -2,6 +2,7 @@ import numpy as np
 from bitarray import bitarray
 from itertools import permutations as ipmt
 import time
+from tqdm import *
 
 import os
 import sys
@@ -22,7 +23,7 @@ n_patches = n_ts-patch_size+1
 lag_max = int(0.1*n_ts)  # to adjust
 groups = 10
 
-# for lag_divide in range(1,groups+1):
+# for lag_divide in range(1,groupss+1):
 for lag_range in [1,3,5,7,9,15,20]:
     # lag[i][j] is the lag from j to i
     lag = np.random.randint(0, lag_range+1, size=(n_nodes,n_nodes), dtype=int)
@@ -31,7 +32,7 @@ for lag_range in [1,3,5,7,9,15,20]:
     perf = []
     lag_perf = []
     execute_times = []
-    for _ in range(5):
+    for _ in tqdm(range(50)):
         trends = {i:bitarray() for i in range(n_nodes)}
         seed = np.random.SeedSequence().generate_state(1)[0]
         data, beta, GC = simulate_er_one_lag(p=n_nodes, T=n_ts, lag=lag, seed=seed)
