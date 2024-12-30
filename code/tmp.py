@@ -24,7 +24,7 @@ for lag_range in [1,3,5,7,9,15,20]:
     perf = []
     lag_perf = []
     execute_times = []
-    for i in trange(5):
+    for i in trange(50):
         seed = np.random.SeedSequence().generate_state(1)[0]
         data, beta, GC = simulate_er_one_lag(p=n_nodes, T=n_ts, lag=lag, seed=seed)
         data_bit, nlags, top_indices = estimate_lags(data, patch_size, lag, lag_max)
