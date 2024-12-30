@@ -5,10 +5,12 @@ from tigramite.independence_tests import ParCorr
 from tigramite.pcmci import PCMCI
 
 
-def pcmci(data, nlags=None, top_indices=None):
+def pcmci(data, nlags=None, top_indices=None, use_raw=False):
     dataframe = pp.DataFrame(data)
     cond_ind_test = ParCorr()
     pcmci = PCMCI(dataframe=dataframe, cond_ind_test=cond_ind_test)
+    if use_raw == True:
+        pass
     if nlags is None:
         results = pcmci.run_pcmci(tau_max=5, pc_alpha=None)
     elif isinstance(nlags, np.ndarray):
