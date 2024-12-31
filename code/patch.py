@@ -5,8 +5,6 @@ sys.path.append('../')
 import numpy as np
 from bitarray import bitarray
 from itertools import permutations as ipmt
-from utils.synthetic import simulate_er_one_lag, compare_graphs, compare_graphs_lag
-from benchmarks.pcmci import pcmci_raw,pcmci
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 

@@ -138,7 +138,7 @@ def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=1e-4, seed=0):
 #     return X.T[burn_in:], beta, GC
 
 
-def simulate_er_one_lag(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0):
+def simulate_er(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0):
     if seed is not None:
         np.random.seed(seed)
 
@@ -151,59 +151,18 @@ def simulate_er_one_lag(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0
     burn_in = 100
     errors = np.random.normal(scale=sd, size=(p, T + burn_in))
     X = np.zeros((p, T + burn_in))
-    if isinstance(lag, int):
-        X[:, :lag] = errors[:, :lag]
-        parents = {i: np.where(GC[i, :] == 1)[0] for i in range(p)}
-        n_noise = len(noise_names)
-        n_funcs = len(function_names)
-        for t in range(lag, T + burn_in):
-            i_noise = np.random.randint(t)%n_noise
-            X[:, t] = distribution(noise_names[i_noise])(size=p)
-            for i in range(p):
-                for j in parents[i]:
-                    i_func = np.random.randint(n_funcs)%n_funcs
-                    X[i, t] += function(function_names[i_func])(X[j, t-lag])
-    elif isinstance(lag, np.ndarray):  # (p,p)
-        X[:, :np.max(lag)] = errors[:, :np.max(lag)]
-        parents = {i: np.where(GC[i, :] == 1)[0] for i in range(p)}
-        n_noise = len(noise_names)
-        n_funcs = len(function_names)
-        for t in range(np.max(lag), T + burn_in):
-            i_noise = np.random.randint(t)%n_noise
-            X[:, t] = distribution(noise_names[i_noise])(size=p)
-            for i in range(p):
-                for j in parents[i]:
-                    i_func = np.random.randint(n_funcs)%n_funcs
-                    X[i, t] += function(function_names[i_func])(X[j, t-lag[i][j]])
-
-
-    return X.T[burn_in:], beta, GC
-
-
-def simulate_er_multi_lag(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0):
-    if seed is not None:
-        np.random.seed(seed)
-
-    # Set up coefficients and Granger causality ground truth.
-    GC = erdos_renyi(p, sparsity)
-
-    beta = make_var_stationary(GC)
-
-    # Generate data.
-    burn_in = 100
-    errors = np.random.normal(scale=sd, size=(p, T + burn_in))
-    X = np.zeros((p, T + burn_in))
-    X[:, :lag] = errors[:, :lag]
+    X[:, :np.max(lag)] = errors[:, :np.max(lag)]
     parents = {i: np.where(GC[i, :] == 1)[0] for i in range(p)}
     n_noise = len(noise_names)
     n_funcs = len(function_names)
-    for t in range(lag, T + burn_in):
+    for t in range(np.max(lag), T + burn_in):
         i_noise = np.random.randint(t)%n_noise
         X[:, t] = distribution(noise_names[i_noise])(size=p)
         for i in range(p):
             for j in parents[i]:
                 i_func = np.random.randint(n_funcs)%n_funcs
                 X[i, t] += function(function_names[i_func])(X[j, t-lag[i][j]])
+
 
     return X.T[burn_in:], beta, GC
 
