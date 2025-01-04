@@ -5,3 +5,5 @@ code/simulate_nonlinear.py
 *.pyc
 */__pycache__/*
 datasets/DREAM3/
+.vscode/
+.DS_Store

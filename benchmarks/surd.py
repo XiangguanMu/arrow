@@ -1,6 +1,7 @@
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append('../')
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -8,18 +9,83 @@ import itertools
 from itertools import combinations as icmb
 from itertools import chain as ichain
 from typing import Tuple, Dict
-import it_tools as it
+import utils.it_tools as it
 import warnings
 import pymp
 from tqdm import tqdm
 from tqdm import trange
-import cupy as cp
+# import cupy as cp
 
 # Suppress all UserWarnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
-def surd(p: np.ndarray) -> Tuple[Dict, Dict, Dict, float]:
+# data_bit/data, nlags, top_indices
+def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use_cp=False):
+    n_ts, n_nodes = X.shape
+    X = X.T
+    nbins = 4 # 00->0 01->1 10->2 11->3, 4 bins
+    graph = np.zeros((n_nodes,n_nodes),dtype=int)
+    if not use_raw:
+        top_lags = np.zeros_like(nlags)
+        top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
+        for i in range(n_nodes):
+            # print(f'SURD CAUSALITY FOR SIGNAL {i+1}')
+            lags = top_lags[i]  # lags of j->i
+            ti_max = np.max(lags)
+            # Y = np.vstack([X[i,1:],X[:,:-1]])
+            Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in range(n_nodes)]])
+            hist, _ = np.histogramdd(Y.T, nbins)
+            I_R, I_S, MI, info_leak = run_surd(hist,use_cp=use_cp)
+            for data in [I_R, I_S]:
+                keys = [k for k, v in data.items() if v > 0.1]
+                if len(keys)>0:
+                    indices = np.concatenate(keys) - 1
+                    graph[indices, i] = 1
+        return graph
+            
+            
+    elif use_raw:
+        # Define the range of nlag values
+        nlags_range = range(1, int(0.1*n_ts), 1)  
+        # Initialize a dictionary to store results
+        unique_lag = {i: [] for i in range(n_nodes)}
+        for i in range(n_nodes):
+            for nlag in nlags_range:        
+                # Prepare the data
+                Y = np.vstack([X[i, nlag:], X[:, :-nlag]])
+                hist, _ = np.histogramdd(Y.T, bins=nbins)
+                I_R, I_S, MI, info_leak = run_surd(hist,use_cp=use_cp)
+                # Calculate the sum of causalities for single-digit tuples
+                single_digit_keys = [key for key in I_R.keys() if len(key) == 1 and key != (i+1,)]
+                sum_causalities = sum(I_R[key] for key in single_digit_keys)
+                # Store the sum for this variable and nlag
+                unique_lag[i].append(sum_causalities)
+        
+        nlags = np.array([np.argmax(unique_lag[i]) for i in range(n_nodes)])
+        for i in range(n_nodes):
+            # Organize data (0 target variable, 1: agent variables)
+            if nlags[i]==0:
+                Y = np.vstack([X[i, :], X[:, :]])
+            else:
+                Y = np.vstack([X[i, nlags[i]:], X[:, :-nlags[i]]])
+            # Run SURD
+            hist, _ = np.histogramdd(Y.T, nbins)    
+            I_R, I_S, MI, info_leak = run_surd(hist)
+            for data in [I_R, I_S]:
+                keys = [k for k, v in data.items() if v > 0.1]
+                if len(keys)>0:
+                    indices = np.concatenate(keys) - 1
+                    graph[indices, i] = 1
+        edges = np.where(graph>0)
+        lag_graph = np.zeros_like(graph)
+        lag_graph[edges] = nlags[edges[0]]
+        return graph, lag_graph
+            
+        
+    
+
+def run_surd(p, use_cp=False):
     '''
     Decompose the mutual information between a target variable and a set 
     of agent variables into three terms: Redundancy (I_R), Synergy (I_S), 
@@ -67,43 +133,47 @@ def surd(p: np.ndarray) -> Tuple[Dict, Dict, Dict, float]:
 
     # Compute the marginal distribution of the target variable
     p_s = p.sum(axis=(*inds,), keepdims=True)
-    p_s_gpu = cp.asarray(p_s)
 
     # Prepare for specific mutual information computation
     combs, Is = [], {}
     
     # Iterate over all combinations of agent variables
-    print('begin computing specific mutual information')
-    p_gpu = cp.asarray(p)
-    print('memory used by p: ', p.shape, p.dtype, p.nbytes)
-    print('memory used by p_gpu: ', p.shape, p_gpu.dtype, p_gpu.nbytes)
-    for i in inds:
-        j_list = list(icmb(inds, i))
-        for j_idx in trange(len(j_list)):
-            j = j_list[j_idx]
-            combs.append(j)
-            noj = tuple(set(inds) - set(j))
-            
-            # Compute joint and conditional distributions for current combinations
-            # p_a = p.sum(axis=(0, *noj), keepdims=True)  # j's marginal
-            # p_as = p.sum(axis=noj, keepdims=True)  # target+j's joint
-            p_a_gpu = p_gpu.sum(axis=(0, *noj), keepdims=True).astype(cp.float16)  # j's marginal
-            p_as_gpu = p_gpu.sum(axis=noj, keepdims=True).astype(cp.float16)  # target+j's joint
-
-            # p_a_s = p_as / p_s  # P(j | target)
-            # p_s_a = p_as / p_a  # P(target | j)
-            p_a_s_gpu = p_as_gpu / p_s_gpu  # P(j | target)
-            p_s_a_gpu = p_as_gpu / p_a_gpu  # P(target | j)
-
-            # Compute specific mutual information
-            tmp = (p_a_s_gpu * (it.mylog_gpu(p_s_a_gpu)-it.mylog_gpu(p_s_gpu))).sum(axis=j).ravel()
-            Is[j] = tmp.get()
-
-            # avoid redundant memory allocation
-            del noj, p_a_gpu, p_as_gpu, p_a_s_gpu, p_s_a_gpu
-            cp._default_memory_pool.free_all_blocks()
-            # Is[j] = (p_a_s * (it.mylog(p_s_a) - it.mylog(p_s))).sum(axis=j).ravel()
-    print('done computing specific mutual information')
+    # print('begin computing specific mutual information')
+    if use_cp:
+        p_s_gpu = cp.asarray(p_s)
+        p_gpu = cp.asarray(p)
+        for i in inds:
+            j_list = list(icmb(inds, i))
+            for j_idx in range(len(j_list)):
+                j = j_list[j_idx]
+                combs.append(j)
+                noj = tuple(set(inds) - set(j))
+                # Compute joint and conditional distributions for current combinations
+                p_a_gpu = p_gpu.sum(axis=(0, *noj), keepdims=True).astype(cp.float16)  # j's marginal
+                p_as_gpu = p_gpu.sum(axis=noj, keepdims=True).astype(cp.float16)  # target+j's joint
+                p_a_s_gpu = p_as_gpu / p_s_gpu  # P(j | target)
+                p_s_a_gpu = p_as_gpu / p_a_gpu  # P(target | j)
+                # Compute specific mutual information
+                tmp = (p_a_s_gpu * (it.mylog_gpu(p_s_a_gpu)-it.mylog_gpu(p_s_gpu))).sum(axis=j).ravel()
+                Is[j] = tmp.get()
+                # avoid redundant memory allocation
+                del noj, p_a_gpu, p_as_gpu, p_a_s_gpu, p_s_a_gpu
+                cp._default_memory_pool.free_all_blocks()
+                # Is[j] = (p_a_s * (it.mylog(p_s_a) - it.mylog(p_s))).sum(axis=j).ravel()
+    elif not use_cp:
+        for i in inds:
+            j_list = list(icmb(inds, i))
+            for j_idx in range(len(j_list)):
+                j = j_list[j_idx]
+                combs.append(j)
+                noj = tuple(set(inds) - set(j))
+                # Compute joint and conditional distributions for current combinations
+                p_a = p.sum(axis=(0, *noj), keepdims=True)  # j's marginal
+                p_as = p.sum(axis=noj, keepdims=True)  # target+j's joint
+                p_a_s = p_as / p_s  # P(j | target)
+                p_s_a = p_as / p_a  # P(target | j)
+                Is[j] = (p_a_s * (it.mylog(p_s_a) - it.mylog(p_s))).sum(axis=j).ravel()
+    # print('done computing specific mutual information')
 
 
     # Compute mutual information for each combination of agent variables
@@ -116,7 +186,7 @@ def surd(p: np.ndarray) -> Tuple[Dict, Dict, Dict, float]:
 
     # Process each value of the target variable
     # for t in range(Nt):
-    for t in trange(Nt):
+    for t in range(Nt):
         # Extract specific mutual information for the current target value
         I1 = np.array([ii[t] for ii in Is.values()])
         
@@ -143,6 +213,7 @@ def surd(p: np.ndarray) -> Tuple[Dict, Dict, Dict, float]:
 
         # Distribute mutual information to redundancy and synergy terms
         for i_, ll in enumerate(lab):
+            # print(f'll: {ll, type(ll)}, red_vars: {red_vars, type(red_vars)}')
             info = Di[i_] * p_s.squeeze()[t]
             if len(ll) == 1:
                 I_R[tuple(red_vars)] += info

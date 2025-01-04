@@ -8,20 +8,37 @@ from tqdm import *
 import time
 import argparse
 from utils.synthetic import simulate_er, compare_graphs, compare_graphs_lag
-from benchmarks.pcmci import pcmci_raw,pcmci
+from benchmarks.pcmci import pcmci
+from benchmarks.surd import surd
+
+use_cp = False
+
+import subprocess
+try:
+    result = subprocess.run(["nvidia-smi"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode == 0:
+        print("GPU is available.")
+        use_cp = True
+    else:
+        print("No GPU found or NVIDIA driver is not installed.")
+except FileNotFoundError:
+    use_cp = False
+    print("nvidia-smi command not found. NVIDIA driver might not be installed.")
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--lag", type=str, default='constant', help="lag mode: constant lag or multiple lags")
-parser.add_argument("--data", type=str, default='raw', help="data mode: use raw data or patched data")
-args = parser.parse_args(args=[])
+parser.add_argument("--data", type=str, default='patched', help="data mode: use raw data or patched data")
+parser.add_argument("--n", type=int, default=3, help="number of nodes")
+parser.add_argument("--model", type=str, default='surd', help="{pcmci, surd}")
+args = parser.parse_args()
 # (n_ts, n_node)
-n_nodes = 10
+n_nodes = args.n
 n_ts = 1000
 patch_size = 3
 lag_max = int(0.1*n_ts)  # to adjust
 
-print(f'====================Lag mode: {args.lag}, Data mode: {args.data}====================')
+print(f'====================Lag mode: {args.lag}, Data mode: {args.data}, Method: {args.model}====================')
 
 for lag_range in [1,3,5,7,9,15,20]:
     # lag[i][j] is the lag from j to i
@@ -37,20 +54,31 @@ for lag_range in [1,3,5,7,9,15,20]:
         seed = np.random.SeedSequence().generate_state(1)[0]
         data, beta, GC = simulate_er(p=n_nodes, T=n_ts, lag=lag, seed=seed)
         GC_lag = GC*lag
-        data_bit, nlags, top_indices = estimate_lags(data, patch_size, lag, lag_max)
         time_start = time.perf_counter()
+        graph = None
         # patched
         if args.data == 'patched':
-            graph = pcmci(data_bit,nlags=nlags, top_indices=top_indices,use_constant=args.lag)
+            data_bit, nlags, top_indices = estimate_lags(data, patch_size, lag, lag_max)
+            top_lags = np.zeros_like(nlags)
+            top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
+            if args.model == 'pcmci':
+                graph = pcmci(data_bit,nlags=nlags, top_indices=top_indices,use_constant=args.lag)
+            if args.model == 'surd':
+                graph = surd(data_bit, nlags, top_indices,use_raw=args.data=='raw', use_constant=args.lag=='constant', use_cp=use_cp)
             time_end = time.perf_counter()
             execute_times.append(time_end-time_start)
             perf.append(compare_graphs(GC, graph))
-            top_lags = np.zeros_like(nlags)
-            top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
+            # print('GC LAG:\n', GC_lag)
+            # print('ESTIMATED LAG:\n', top_lags)
             lag_perf.append(compare_graphs_lag(GC, GC_lag, top_lags))
         # raw
         elif args.data == 'raw':
-            graph,estimated_lag = pcmci(data, use_raw=True,use_constant=args.lag)
+            if args.model == 'pcmci':
+                graph, estimated_lag = pcmci(data, use_raw=True,use_constant=args.lag=='constant')
+            if args.model == 'surd':
+                graph, estimated_lag = surd(data, use_raw=True, use_constant=args.lag=='constant')
+                # print('GC LAG:\n', GC_lag)
+                # print('ESTIMATED LAG:\n', estimated_lag)
             time_end = time.perf_counter()
             perf.append(compare_graphs(GC, graph))
             execute_times.append(time_end-time_start)

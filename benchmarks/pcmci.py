@@ -31,18 +31,17 @@ def pcmci(data, nlags=None, top_indices=None, use_raw=False, use_constant=False)
                 estimated_lag[rows[i], cols[i]] = nlags[cols[i]]
             # estimated_lag[rows, cols] = nlags[cols]  # why error
             return estimated_graph, estimated_lag
-    if nlags is None:
-        results = pcmci.run_pcmci(tau_max=5, pc_alpha=None)  # default tau_max
-    elif isinstance(nlags, np.ndarray):
-        t_max = np.max(nlags[top_indices[:,0], top_indices[:,1]])
-        t_min = np.min(nlags[top_indices[:,0], top_indices[:,1]])
-        # print('t_min, t_max ', t_min, t_max)
-        results = pcmci.run_pcmci(tau_min=t_min, tau_max=t_max, pc_alpha=None)
-        q_matrix = pcmci.get_corrected_pvalues(p_matrix=results["p_matrix"], fdr_method="fdr_bh")
-        q_matrix = (q_matrix < 0.05) * 1  # add 00
-        n_nodes = data.shape[1]
-        valid_mask = nlags < q_matrix.shape[2]
-        results = np.zeros((n_nodes, n_nodes))
-        rows, cols = np.where(valid_mask)
-        results[rows, cols] = q_matrix[cols, rows, nlags[rows,cols]]
-        return results
+    elif use_raw == False:
+        if isinstance(nlags, np.ndarray):
+            t_max = np.max(nlags[top_indices[:,0], top_indices[:,1]])
+            t_min = np.min(nlags[top_indices[:,0], top_indices[:,1]])
+            # print('t_min, t_max ', t_min, t_max)
+            results = pcmci.run_pcmci(tau_min=t_min, tau_max=t_max, pc_alpha=None)
+            q_matrix = pcmci.get_corrected_pvalues(p_matrix=results["p_matrix"], fdr_method="fdr_bh")
+            q_matrix = (q_matrix < 0.05) * 1  # add 00
+            n_nodes = data.shape[1]
+            valid_mask = nlags < q_matrix.shape[2]
+            results = np.zeros((n_nodes, n_nodes))
+            rows, cols = np.where(valid_mask)
+            results[rows, cols] = q_matrix[cols, rows, nlags[rows,cols]]
+            return results

@@ -18,7 +18,7 @@ def estimate_lags(data, patch_size, lag, lag_max):
         lag (np.nadarray): lag[i][j] is the lag from j to i.
         lag_max (int): The upper bound of lag to be considered.
     Output:
-        top_lags (np.ndarray): (n_node, n_node), optimal time lags for each pair of nodes.
+        nlags (np.ndarray): (n_node, n_node), optimal time lags for each pair of nodes.
     """
     n_ts, n_nodes = data.shape
     n_patches = n_ts-patch_size+1
