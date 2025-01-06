@@ -24,6 +24,7 @@ try:
 except FileNotFoundError:
     use_cp = False
     print("nvidia-smi command not found. NVIDIA driver might not be installed.")
+print(f'use_cp: {use_cp}')
 
 
 parser = argparse.ArgumentParser()
@@ -76,7 +77,7 @@ for lag_range in [1,3,5,7,9,15,20]:
             if args.model == 'pcmci':
                 graph, estimated_lag = pcmci(data, use_raw=True,use_constant=args.lag=='constant')
             if args.model == 'surd':
-                graph, estimated_lag = surd(data, use_raw=True, use_constant=args.lag=='constant')
+                graph, estimated_lag = surd(data, use_raw=True, use_constant=args.lag=='constant', use_cp=use_cp)
                 # print('GC LAG:\n', GC_lag)
                 # print('ESTIMATED LAG:\n', estimated_lag)
             time_end = time.perf_counter()

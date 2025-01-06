@@ -11,10 +11,10 @@ from itertools import chain as ichain
 from typing import Tuple, Dict
 import utils.it_tools as it
 import warnings
-import pymp
+# import pymp
 from tqdm import tqdm
 from tqdm import trange
-# import cupy as cp
+import cupy as cp
 
 # Suppress all UserWarnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -54,8 +54,8 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
             for nlag in nlags_range:        
                 # Prepare the data
                 Y = np.vstack([X[i, nlag:], X[:, :-nlag]])
-                hist, _ = np.histogramdd(Y.T, bins=nbins)
-                I_R, I_S, MI, info_leak = run_surd(hist,use_cp=use_cp)
+                hist, _ = np.histogramdd(Y.T, bins=nbins)  # bottleneck 1: A float-type Y slow down the computation of joint distribution
+                I_R, I_S, MI, info_leak = run_surd(hist,use_cp=use_cp)  # bottleneck 2: Iterate over all possible lags
                 # Calculate the sum of causalities for single-digit tuples
                 single_digit_keys = [key for key in I_R.keys() if len(key) == 1 and key != (i+1,)]
                 sum_causalities = sum(I_R[key] for key in single_digit_keys)
