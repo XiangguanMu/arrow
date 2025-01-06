@@ -130,6 +130,6 @@ for lag_range in [1,3,5,7,9,15,20]:
     print(np.mean(np.reshape(perf, (-1, 3)), axis=0), np.std(np.reshape(perf, (-1, 3)), axis=0))
     if len(lag_perf)>0:
         print("Means and standard deviations for lag TPR, FPR and AUC with lag range in ", lag_range, "time interval")
-        print(np.mean(np.reshape(lag_perf, (-1, 3)), axis=0), np.std(np.reshape(lag_perf, (-1, 2)), axis=0))
+        print(np.mean(np.reshape(lag_perf, (-1, 3)), axis=0), np.std(np.reshape(lag_perf, (-1, 3)), axis=0))
     print("Means and standard deviations for execution time with lag range in ", lag_range, "time interval")
     print(np.mean(execute_times), np.std(execute_times))

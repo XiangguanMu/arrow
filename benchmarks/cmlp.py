@@ -167,7 +167,7 @@ def restore_parameters(model, best_model):
         params.data = best_params
 
 
-def train_model_ista(cmlp, X, lr, max_iter, lam=0, lam_ridge=0, penalty='H',
+def train_model_ista(cmlp, X, use_raw, lr, max_iter, lam=0, lam_ridge=0, penalty='H',
                      lookback=5, check_every=100, verbose=1):
     '''Train model with Adam.'''
     lag = cmlp.lag
@@ -181,8 +181,12 @@ def train_model_ista(cmlp, X, lr, max_iter, lam=0, lam_ridge=0, penalty='H',
     best_model = None
 
     # Calculate smooth error.
-    loss = sum([loss_fn(cmlp.networks[i](X[:, :]), X[:, np.max(lag[i]):, i:i+1])
-                for i in range(p)])
+    if use_raw:
+        loss = sum([loss_fn(cmlp.networks[i](X[:, :]), X[:, lag:, i:i+1])
+                    for i in range(p)])
+    else:
+        loss = sum([loss_fn(cmlp.networks[i](X[:, :]), X[:, np.max(lag[i]):, i:i+1])
+                    for i in range(p)])
     ridge = sum([ridge_regularize(net, lam_ridge) for net in cmlp.networks])
     smooth = loss + ridge
 
@@ -200,8 +204,12 @@ def train_model_ista(cmlp, X, lr, max_iter, lam=0, lam_ridge=0, penalty='H',
         cmlp.zero_grad()
 
         # Calculate loss for next iteration.
-        loss = sum([loss_fn(cmlp.networks[i](X[:, :]), X[:, np.max(lag[i]):, i:i+1])
-                    for i in range(p)])
+        if use_raw:
+            loss = sum([loss_fn(cmlp.networks[i](X[:, :]), X[:, lag:, i:i+1])
+                        for i in range(p)])
+        else:
+            loss = sum([loss_fn(cmlp.networks[i](X[:, :]), X[:, np.max(lag[i]):, i:i+1])
+                        for i in range(p)])
         ridge = sum([ridge_regularize(net, lam_ridge) for net in cmlp.networks])
         smooth = loss + ridge
 
@@ -236,28 +244,29 @@ def train_model_ista(cmlp, X, lr, max_iter, lam=0, lam_ridge=0, penalty='H',
 
 def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, use_cp=False):
     n_nodes = data.shape[1]
-    top_lags = np.zeros_like(nlags)
-    top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
+    if top_indices is not None:
+        top_lags = np.zeros_like(nlags)
+        top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
+    max_lag = int(data.shape[0]*0.1)
     if use_cp:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if use_raw:
-            cmlp = cMLP(n_nodes, lag=5, hidden=[100]).cuda(device=device)  # default lag?
+            cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100]).cuda(device=device)  # default lag?
         else:
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100]).cuda(device=device)
     else:
         if use_raw:
-            cmlp = cMLP(n_nodes, lag=5, hidden=[100])  # default lag?
+            cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100])  # default lag?
         else:
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100])
     X = torch.tensor(data[np.newaxis], dtype=torch.float32)
     train_loss_list = train_model_ista(
-        cmlp, X, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=1000,
+        cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=1000,
         check_every=100)
     graph = cmlp.GC().cpu().data.numpy()
     if use_raw:
         lag_graph = np.zeros_like(graph).astype(int)
         for i in range(n_nodes):
-            print('Est lag')
             # (ks, n)
             GC_est_lag_i = cmlp.GC(ignore_lag=False, threshold=False)[i].cpu().data.numpy().T[::-1]
             lag_graph[i] = np.argmax(GC_est_lag_i, axis=0)
