@@ -7,3 +7,4 @@ code/simulate_nonlinear.py
 datasets/DREAM3/
 .vscode/
 .DS_Store
+*.ipynb

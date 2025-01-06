@@ -2,14 +2,17 @@ import os
 import sys
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append('../')
+import torch
 import numpy as np
 from patch import estimate_lags
 from tqdm import *
 import time
 import argparse
-from utils.synthetic import simulate_er, compare_graphs, compare_graphs_lag
+from utils.synthetic import simulate_er, compare_graphs, compare_graphs_lag, simulate_var
 from benchmarks.pcmci import pcmci
 from benchmarks.surd import surd
+from benchmarks.cmlp import ngc
+# import matplotlib.pyplot as plt
 
 use_cp = False
 
@@ -25,13 +28,49 @@ except FileNotFoundError:
     use_cp = False
     print("nvidia-smi command not found. NVIDIA driver might not be installed.")
 
+device = torch.device('cuda')
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--lag", type=str, default='constant', help="lag mode: constant lag or multiple lags")
 parser.add_argument("--data", type=str, default='patched', help="data mode: use raw data or patched data")
+parser.add_argument("--dataset", type=str, default='er', help="dataset: {er, var}")
 parser.add_argument("--n", type=int, default=3, help="number of nodes")
-parser.add_argument("--model", type=str, default='surd', help="{pcmci, surd}")
+parser.add_argument("--model", type=str, default='surd', help="{pcmci, surd, ngc}")
 args = parser.parse_args()
+
+
+def save_results(graph, estimate_lag, GC, GC_lag, i):
+    path_dir = f'../results/nps/{args.model}_{args.lag}_{args.data}_{n_nodes}_{lag_range}/'
+    if not os.path.exists(path_dir):
+        os.makedirs(path_dir)
+
+    graph_dir = path_dir+'graph/'
+    if not os.path.exists(graph_dir):
+        os.makedirs(graph_dir)
+    if graph is not None:
+        np.save(graph_dir+f'{i}.npy', graph)
+    
+    estimate_lag_dir = path_dir+'estimate_lag/'
+    if not os.path.exists(estimate_lag_dir):
+        os.makedirs(estimate_lag_dir)
+    if estimate_lag is not None:
+        np.save(estimate_lag_dir+f'{i}.npy', estimate_lag)
+    
+    GC_dir = path_dir+'GC/'
+    if not os.path.exists(GC_dir):
+        os.makedirs(GC_dir)
+    if GC is not None:
+        np.save(GC_dir+f'{i}.npy', GC)
+    
+    GC_lag_dir = path_dir+'GC_lag/'
+    if not os.path.exists(GC_lag_dir):
+        os.makedirs(GC_lag_dir)
+    if GC_lag is not None:
+        np.save(GC_lag_dir+f'{i}.npy', GC_lag)
+    
+    print('Results saved in ', path_dir, 'round ', i)
+
 # (n_ts, n_node)
 n_nodes = args.n
 n_ts = 1000
@@ -59,35 +98,38 @@ for lag_range in [1,3,5,7,9,15,20]:
         # patched
         if args.data == 'patched':
             data_bit, nlags, top_indices = estimate_lags(data, patch_size, lag, lag_max)
-            top_lags = np.zeros_like(nlags)
-            top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
+            estimated_lag = np.zeros_like(nlags)
+            estimated_lag[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
             if args.model == 'pcmci':
-                graph = pcmci(data_bit,nlags=nlags, top_indices=top_indices,use_constant=args.lag)
+                graph = pcmci(data_bit, nlags, top_indices, use_raw=False, use_constant=args.lag=='constant')
             if args.model == 'surd':
-                graph = surd(data_bit, nlags, top_indices,use_raw=args.data=='raw', use_constant=args.lag=='constant', use_cp=use_cp)
+                graph = surd(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
+            if args.model == 'ngc':
+                graph = ngc(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
             time_end = time.perf_counter()
             execute_times.append(time_end-time_start)
             perf.append(compare_graphs(GC, graph))
-            # print('GC LAG:\n', GC_lag)
-            # print('ESTIMATED LAG:\n', top_lags)
-            lag_perf.append(compare_graphs_lag(GC, GC_lag, top_lags))
+            lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))
         # raw
         elif args.data == 'raw':
             if args.model == 'pcmci':
                 graph, estimated_lag = pcmci(data, use_raw=True,use_constant=args.lag=='constant')
             if args.model == 'surd':
-                graph, estimated_lag = surd(data, use_raw=True, use_constant=args.lag=='constant')
-                # print('GC LAG:\n', GC_lag)
-                # print('ESTIMATED LAG:\n', estimated_lag)
+                graph, estimated_lag = surd(data, use_raw=True, use_constant=args.lag=='constant', use_cp=use_cp)
+            if args.model == 'ngc':
+                graph, estimated_lag = ngc(data, use_raw=True, use_constant=args.lag=='constant', use_cp=use_cp)          
             time_end = time.perf_counter()
             perf.append(compare_graphs(GC, graph))
             execute_times.append(time_end-time_start)
             if estimated_lag is not None:
                 lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))
-    print("Means and standard deviations for TPR, FDR and AUC with lag range in ", lag_range, "time interval")
+        
+        save_results(graph, estimated_lag, GC, GC_lag, i)
+
+    print("Means and standard deviations for TPR, FPR and AUC with lag range in ", lag_range, "time interval")
     print(np.mean(np.reshape(perf, (-1, 3)), axis=0), np.std(np.reshape(perf, (-1, 3)), axis=0))
     if len(lag_perf)>0:
-        print("Means and standard deviations for lag accuracy with lag range in ", lag_range, "time interval")
-        print(np.mean(lag_perf), np.std(lag_perf))
+        print("Means and standard deviations for lag TPR, FPR and AUC with lag range in ", lag_range, "time interval")
+        print(np.mean(np.reshape(lag_perf, (-1, 3)), axis=0), np.std(np.reshape(lag_perf, (-1, 2)), axis=0))
     print("Means and standard deviations for execution time with lag range in ", lag_range, "time interval")
     print(np.mean(execute_times), np.std(execute_times))
