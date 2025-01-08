@@ -9,3 +9,4 @@ datasets/DREAM3/
 .DS_Store
 *.ipynb
 code/*_test.py
+*.out

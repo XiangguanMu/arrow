@@ -1,8 +1,0 @@
-nohup: ignoring input
-Could not import packages for CMIknn and GPDC estimation
-Could not import rpy package
-Could not import r-package RCIT
-GPU is available.
-use_cp: True
-====================Lag mode: constant, Data mode: raw, Method: ngc====================
-  0%|          | 0/10 [00:00<?, ?it/s]
