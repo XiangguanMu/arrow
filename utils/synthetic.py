@@ -73,57 +73,25 @@ def make_var_stationary(beta, radius=0.97):
         return beta
 
 
-def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=1e-4, seed=0):
-    if seed is not None:
-        np.random.seed(seed)
-
-    # Set up coefficients and Granger causality ground truth.
-    # GC = np.eye(p, dtype=int)  # diagonal matrix
-    GC = np.zeros((p,p), dtype=int)  # diagonal matrix
-    # beta = np.eye(p) * beta_value  # diagonal matrix too
-    beta = np.zeros((p,p))  # diagonal matrix too
-
-    num_nonzero = 1
-    # num_nonzero = int(p * sparsity) - 1
-    for i in range(p):
-        choice = np.random.choice(p - 1, size=num_nonzero, replace=False)
-        choice[choice >= i] += 1
-        beta[i, choice] = beta_value
-        GC[i, choice] = 1
-
-    beta = np.hstack([beta for _ in range(lag)])
-    beta = make_var_stationary(beta)
-
-    # Generate data.
-    burn_in = 100
-    errors = np.random.normal(scale=sd, size=(p, T + burn_in))
-    X = np.zeros((p, T + burn_in))
-    X[:, :lag] = errors[:, :lag]
-    for t in range(lag, T + burn_in):
-        X[:, t] = np.dot(beta, X[:, (t-lag):t].flatten(order='F'))
-        X[:, t] += errors[:, t-1]
-
-    return X.T[burn_in:], beta, GC
-
-# def simulate_var_one_slice(p, T, lag, sparsity=0.2, beta_value=1.0, sd=1e-4, seed=0):
+# def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=1e-4, seed=0):
 #     if seed is not None:
 #         np.random.seed(seed)
 
 #     # Set up coefficients and Granger causality ground truth.
-#     # GC = np.eye(p, dtype=int)  # diagonal matrix
-#     GC = np.zeros((p,p), dtype=int)  # diagonal matrix
-#     # beta = np.eye(p) * beta_value  # diagonal matrix too
-#     beta = np.zeros((p,p))  # diagonal matrix too
+#     GC = np.eye(p, dtype=int)  # diagonal matrix
+#     # GC = np.zeros((p,p), dtype=int)  # diagonal matrix
+#     beta = np.eye(p) * beta_value  # diagonal matrix too
+#     # beta = np.zeros((p,p))  # diagonal matrix too
 
-#     num_nonzero = 1
-#     # num_nonzero = int(p * sparsity) - 1
+#     # num_nonzero = 1
+#     num_nonzero = int(p * sparsity) - 1
 #     for i in range(p):
 #         choice = np.random.choice(p - 1, size=num_nonzero, replace=False)
 #         choice[choice >= i] += 1
 #         beta[i, choice] = beta_value
 #         GC[i, choice] = 1
 
-#     # beta = np.hstack([beta for _ in range(lag)])
+#     beta = np.hstack([beta for _ in range(lag)])
 #     beta = make_var_stationary(beta)
 
 #     # Generate data.
@@ -132,10 +100,48 @@ def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=1e-4, seed=0):
 #     X = np.zeros((p, T + burn_in))
 #     X[:, :lag] = errors[:, :lag]
 #     for t in range(lag, T + burn_in):
-#         X[:, t] = np.dot(beta, X[:, (t-lag)])
+#         X[:, t] = np.dot(beta, X[:, (t-lag):t].flatten(order='F'))
 #         X[:, t] += errors[:, t-1]
 
 #     return X.T[burn_in:], beta, GC
+
+
+def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=0.1, seed=0):
+    if seed is not None:
+        np.random.seed(seed)
+
+    # Set up coefficients and Granger causality ground truth.
+    GC = np.eye(p, dtype=int)
+    beta = np.eye(p) * beta_value
+
+    # num_nonzero = 1
+    num_nonzero = int(p * sparsity) - 1
+    for i in range(p):
+        choice = np.random.choice(p - 1, size=num_nonzero, replace=False)
+        choice[choice >= i] += 1
+        beta[i, choice] = beta_value
+        GC[i, choice] = 1
+
+    # beta = np.hstack([beta for _ in range(lag)])
+    beta = make_var_stationary(beta)
+
+    # Generate data.
+    burn_in = 100
+    errors = np.random.normal(scale=sd, size=(p, T + burn_in))
+    X = np.zeros((p, T + burn_in))
+    # X[:, :lag] = errors[:, :lag]
+    X[:, :np.max(lag)] = errors[:, :np.max(lag)]
+    parents = {i: np.where(GC[i, :] == 1)[0] for i in range(p)}
+    # X[:, :lag] = errors[:, :lag]
+    for t in range(np.max(lag), T + burn_in):
+        X[:, t] = np.random.normal(scale=sd, size=p)
+        for i in range(p):
+            for j in parents[i]:
+                X[i, t] += np.dot(beta[i, j], X[j, t-lag[i][j]])
+        # X[:, t] = np.dot(beta, X[:, (t-lag):t].flatten(order='F'))
+        # X[:, t] += + errors[:, t-1]
+
+    return X.T[burn_in:], beta, GC
 
 
 def simulate_er(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0):
@@ -312,9 +318,21 @@ def compare_graphs_lag(true_graph, true_graph_lag, estimated_graph_lag):
     """
     Compute the ratio of all true edges w./w.o. their true lags are detected
     """
+    # TPR: # true lag detectes / # true edges
     num_edges = len(true_graph[np.where(true_graph != 0.0)])
     true_idxs = np.nonzero(true_graph)
     estimated_edges = np.array([true_graph_lag[true_idxs[0][i]][true_idxs[1][i]]==estimated_graph_lag[true_idxs[0][i]][true_idxs[1][i]] for i in range(num_edges)])
     num_edges_correct_estimated = np.sum(estimated_edges)
-    return num_edges_correct_estimated/num_edges
-    
+    tpr = num_edges_correct_estimated/num_edges
+
+    # FPR: # false lag detects / # empty lags
+    false_idxs = np.nonzero(1-true_graph)
+    # detect lag where there is no edge
+    estimated_zeros = np.array([true_graph_lag[false_idxs[0][i]][false_idxs[1][i]]!=estimated_graph_lag[false_idxs[0][i]][false_idxs[1][i]] for i in range(len(false_idxs[0]))])
+    num_zeros_correct_estimated = np.sum(estimated_zeros)
+    fpr = num_zeros_correct_estimated/len(false_idxs[0])
+
+    estimated_graph_lag_bool = np.zeros_like(estimated_graph_lag)
+    estimated_graph_lag_bool[true_idxs] = (estimated_graph_lag[true_idxs]==true_graph_lag[true_idxs])
+    AUC = roc_auc_score(true_graph.flatten(), estimated_graph_lag_bool.flatten())
+    return tpr, fpr, AUC

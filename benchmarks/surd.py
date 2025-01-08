@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # data_bit/data, nlags, top_indices
 def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use_cp=False):
     n_ts, n_nodes = X.shape
-    X = X.T
+    X = X.T  # n_nodes, n_ts
     nbins = 4 # 00->0 01->1 10->2 11->3, 4 bins
     graph = np.zeros((n_nodes,n_nodes),dtype=int)
     if not use_raw:
@@ -31,30 +31,46 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
         top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
         for i in range(n_nodes):
             # print(f'SURD CAUSALITY FOR SIGNAL {i+1}')
-            lags = top_lags[i]  # lags of j->i
+            lags = top_lags[i]  # lags of j->i 
             ti_max = np.max(lags)
-            # Y = np.vstack([X[i,1:],X[:,:-1]])
             Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in range(n_nodes)]])
-            hist, _ = np.histogramdd(Y.T, nbins)
+            if use_cp:
+                Y_gpu = cp.asarray(Y)
+                hist_gpu, _gpu = cp.histogramdd(Y_gpu.T, bins=nbins)
+                # hist_gpu, _gpu = cp.histogramdd(Y_gpu.T, bins=[np.arange(-0.5,4)]*Y.shape[0])  # [-0.5,5),...,[2.5,3.5)
+                hist = cp.asnumpy(hist_gpu)
+            elif not use_cp:
+                hist, _ = np.histogramdd(Y.T, bins=nbins)
+            
             I_R, I_S, MI, info_leak = run_surd(hist,use_cp=use_cp)
-            for data in [I_R, I_S]:
+            # print(f'in surd at node {i+1}')
+            # nice_print(I_R,I_S, MI, info_leak)
+            I_U = {k:v/max(MI.values()) for k, v in I_R.items() if len(k)==1}
+            I_S = {k:v/max(MI.values()) for k, v in I_S.items()}
+            for data in [I_U, I_S]:
                 keys = [k for k, v in data.items() if v > 0.1]
                 if len(keys)>0:
                     indices = np.concatenate(keys) - 1
-                    graph[indices, i] = 1
+                    graph[i, indices] = 1
         return graph
             
             
     elif use_raw:
         # Define the range of nlag values
-        nlags_range = range(1, int(0.1*n_ts), 1)  
+        nlags_range = range(1, 10, 1)  
+        # nlags_range = range(1, int(0.1*n_ts), 1)  
         # Initialize a dictionary to store results
         unique_lag = {i: [] for i in range(n_nodes)}
         for i in range(n_nodes):
-            for nlag in nlags_range:        
+            for nlag in nlags_range:   
                 # Prepare the data
                 Y = np.vstack([X[i, nlag:], X[:, :-nlag]])
-                hist, _ = np.histogramdd(Y.T, bins=nbins)  # bottleneck 1: A float-type Y slow down the computation of joint distribution
+                if use_cp:
+                    Y_gpu = cp.asarray(Y)
+                    hist_gpu, _gpu = cp.histogramdd(Y_gpu.T, bins=nbins)
+                    hist = cp.asnumpy(hist_gpu)
+                elif not use_cp:
+                    hist, _ = np.histogramdd(Y.T, bins=nbins)  # bottleneck 1: A float-type Y slow down the computation of joint distribution
                 I_R, I_S, MI, info_leak = run_surd(hist,use_cp=use_cp)  # bottleneck 2: Iterate over all possible lags
                 # Calculate the sum of causalities for single-digit tuples
                 single_digit_keys = [key for key in I_R.keys() if len(key) == 1 and key != (i+1,)]
@@ -63,6 +79,8 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
                 unique_lag[i].append(sum_causalities)
         
         nlags = np.array([np.argmax(unique_lag[i]) for i in range(n_nodes)])
+        # nlags = np.array([1] * n_nodes)
+
         for i in range(n_nodes):
             # Organize data (0 target variable, 1: agent variables)
             if nlags[i]==0:
@@ -70,13 +88,24 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
             else:
                 Y = np.vstack([X[i, nlags[i]:], X[:, :-nlags[i]]])
             # Run SURD
-            hist, _ = np.histogramdd(Y.T, nbins)    
+            # hist, _ = np.histogramdd(Y.T, nbins)    
+            if use_cp:
+                Y_gpu = cp.asarray(Y)
+                hist_gpu, _gpu = cp.histogramdd(Y_gpu.T, bins=nbins)
+                hist = cp.asnumpy(hist_gpu)
+            elif not use_cp:
+                hist, _ = np.histogramdd(Y.T, bins=nbins)
             I_R, I_S, MI, info_leak = run_surd(hist)
-            for data in [I_R, I_S]:
+            # print(f'in surd at node {i+1}')
+            # nice_print(I_R,I_S, MI, info_leak)
+            I_U = {k:v/max(MI.values()) for k, v in I_R.items() if len(k)==1}
+            I_S = {k:v/max(MI.values()) for k, v in I_S.items()}
+            for data in [I_U, I_S]:
                 keys = [k for k, v in data.items() if v > 0.1]
+                # keys = [k for k, v in data.items() if v > 0.06]
                 if len(keys)>0:
                     indices = np.concatenate(keys) - 1
-                    graph[indices, i] = 1
+                    graph[i,indices] = 1
         edges = np.where(graph>0)
         lag_graph = np.zeros_like(graph)
         lag_graph[edges] = nlags[edges[0]]

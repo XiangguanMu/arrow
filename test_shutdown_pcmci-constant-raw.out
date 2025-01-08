@@ -1,0 +1,15 @@
+nohup: ignoring input
+Could not import packages for CMIknn and GPDC estimation
+Could not import rpy package
+Could not import r-package RCIT
+GPU is available.
+use_cp: True
+====================Lag mode: constant, Data mode: patched, Method: surd====================
+  0%|          | 0/5 [00:00<?, ?it/s]in surd at node 1
+  0%|          | 0/5 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/yyy/dy/causal-project/patch-mining/code/tmp.py", line 113, in <module>
+    graph = surd(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
+  File "/home/yyy/dy/causal-project/patch-mining/code/../benchmarks/surd.py", line 45, in surd
+    nice_print(I_R,I_S, MI, info_leak)
+UnboundLocalError: local variable 'I_R' referenced before assignment
