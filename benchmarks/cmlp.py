@@ -254,26 +254,28 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         X = torch.tensor(data[np.newaxis], dtype=torch.float32, device=device)
         if use_raw:
-            cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100]).cuda(device=device)  # default lag?
+            cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100]).cuda(device=device)
         else:
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100]).cuda(device=device)
     else:
         X = torch.tensor(data[np.newaxis], dtype=torch.float32)
         if use_raw:
-            cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100])  # default lag?
+            cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100])
         else:
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100])
     
     train_loss_list = train_model_ista(
-        cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=50000,
-        check_every=1000, verbose=False)
+        cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=5000, check_every=100, verbose=False)
     graph = cmlp.GC().cpu().data.numpy()
     if use_raw:
         lag_graph = np.zeros_like(graph).astype(int)
         for i in range(n_nodes):
             # (ks, n)
             GC_est_lag_i = cmlp.GC(ignore_lag=False, threshold=False)[i].cpu().data.numpy().T[::-1]
-            lag_graph[i] = np.argmax(GC_est_lag_i, axis=0)
+            # others to i
+            lag_i = np.argmax(GC_est_lag_i, axis=0)
+            lag_i[np.max(GC_est_lag_i, axis=0) <= 0] = -1  # all weights = 0, no lag
+            lag_graph[i] = lag_i+1  # index begins by 0, but lag begins by 1
         
         return graph,lag_graph
     elif not use_raw:

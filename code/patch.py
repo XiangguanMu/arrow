@@ -80,6 +80,7 @@ def estimate_lags(data, patch_size, lag, lag_max):
         if len(top_indices)==n_top:
             break
     top_indices = np.array(top_indices)
+    # # debug mode
     # top_indices = np.argpartition(ncandidates.flatten(), -n_top)[-n_top:]
     # top_indices = np.unravel_index(top_indices, ncandidates.shape)
     # top_indices = np.transpose(top_indices)  # [[index0, index1],...]

@@ -36,11 +36,11 @@ device = torch.device('cuda')
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--lag", type=str, default='multiple', choices=['constant','multiple'], help="lag mode: constant lag or multiple lags")
+parser.add_argument("--lag", type=str, default='constant', choices=['constant','multiple'], help="lag mode: constant lag or multiple lags")
 parser.add_argument("--data", type=str, default='raw', choices=['raw', 'patched'], help="data mode: use raw data or patched data")
-parser.add_argument("--dataset", type=str, default='er', choices=['var', 'er'], help="dataset: {er, var}")
+parser.add_argument("--dataset", type=str, default='var', choices=['var', 'er'], help="dataset: {er, var}")
 parser.add_argument("--n", type=int, default=10, help="number of nodes")
-parser.add_argument("--model", type=str, default='varlingam', choices=['pcmci', 'surd', 'ngc', 'varlingam'], help="{pcmci, surd, ngc, varlingam}")
+parser.add_argument("--model", type=str, default='ngc', choices=['pcmci', 'surd', 'ngc', 'varlingam'], help="{pcmci, surd, ngc, varlingam}")
 # args = parser.parse_args(args=[])  # debug mode
 args = parser.parse_args()
 
@@ -89,12 +89,14 @@ for lag_range in [1,3,5,7,9,15,20]:
     if args.lag == 'constant':
         lag = np.ones((n_nodes,n_nodes), dtype=int)*lag_range
     elif args.lag == 'multiple':
+        if lag_range == 1:  # same as constant test
+            continue
         lag = np.random.randint(1, lag_range+1, size=(n_nodes,n_nodes), dtype=int)
     # print(lag)
     perf = []
     lag_perf = []
     execute_times = []
-    for i in trange(2):
+    for i in trange(3):
         seed = np.random.SeedSequence().generate_state(1)[0]
         if args.dataset == 'er':
             data, beta, GC = simulate_er(p=n_nodes, T=n_ts, lag=lag, seed=seed)

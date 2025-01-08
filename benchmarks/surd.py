@@ -30,14 +30,15 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
         top_lags = np.zeros_like(nlags)
         top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
         for i in range(n_nodes):
-            # print(f'SURD CAUSALITY FOR SIGNAL {i+1}')
             lags = top_lags[i]  # lags of j->i 
             ti_max = np.max(lags)
-            Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in range(n_nodes)]])
+            preserved_ids = np.append(np.array([i,i]), np.argwhere(lags>0).flatten())
+            # pruned Y
+            Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in preserved_ids[1:]]])
+            # Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in range(n_nodes)]])
             if use_cp:
                 Y_gpu = cp.asarray(Y)
                 hist_gpu, _gpu = cp.histogramdd(Y_gpu.T, bins=nbins)
-                # hist_gpu, _gpu = cp.histogramdd(Y_gpu.T, bins=[np.arange(-0.5,4)]*Y.shape[0])  # [-0.5,5),...,[2.5,3.5)
                 hist = cp.asnumpy(hist_gpu)
             elif not use_cp:
                 hist, _ = np.histogramdd(Y.T, bins=nbins)
@@ -50,8 +51,10 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
             for data in [I_U, I_S]:
                 keys = [k for k, v in data.items() if v > 0.1]
                 if len(keys)>0:
-                    indices = np.concatenate(keys) - 1
-                    graph[i, indices] = 1
+                    # indices = np.concatenate(keys) - 1
+                    # graph[i, indices] = 1
+                    preserved_indices = preserved_ids[np.concatenate(keys) - 1]
+                    graph[i, preserved_ids] = 1
         return graph
             
             
@@ -110,9 +113,7 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
         lag_graph = np.zeros_like(graph)
         lag_graph[edges] = nlags[edges[0]]
         return graph, lag_graph
-            
-        
-    
+
 
 def run_surd(p, use_cp=False):
     '''
