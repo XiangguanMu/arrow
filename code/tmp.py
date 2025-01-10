@@ -93,7 +93,7 @@ for lag_range in [1,3,5,7,9,15,20]:
     perf = []
     lag_perf = []
     execute_times = []
-    for i in trange(3):
+    for i in trange(10):
         seed = np.random.SeedSequence().generate_state(1)[0]
         if args.dataset == 'er':
             data, beta, GC = simulate_er(p=n_nodes, T=n_ts, lag=lag, seed=seed)
@@ -112,7 +112,8 @@ for lag_range in [1,3,5,7,9,15,20]:
             if args.model == 'surd':
                 graph = surd(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
             if args.model == 'ngc':
-                graph, epoch_times = ngc(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
+                graph, epoch_times = ngc(data, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
+                # graph, epoch_times = ngc(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
                 execute_times.extend(epoch_times)
                 perf.append(compare_graphs(GC, graph))
                 lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))

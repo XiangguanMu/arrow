@@ -31,7 +31,7 @@ def pcmci(data, nlags=None, top_indices=None, use_raw=False, use_constant=False)
         if isinstance(nlags, np.ndarray):
             t_max = np.max(nlags[top_indices[:,0], top_indices[:,1]])
             t_min = np.min(nlags[top_indices[:,0], top_indices[:,1]])
-            print('t_min, t_max ', t_min, t_max)
+            # print('t_min, t_max ', t_min, t_max)
 
             patch_selected_links = {}
             # for deduced pairs, use deduced lags
