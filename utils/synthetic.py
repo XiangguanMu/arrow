@@ -306,12 +306,17 @@ def compare_graphs(true_graph, estimated_graph):
         fdr = 0
     else:
         fdr = float(fp) / (float(fp) + float(tp))
+    if tn + fp == 0:
+        fpr = 0
+    else:
+        fpr = float(fp) / (float(tn) + float(fp))
 
     shd = structural_hamming_distance(true_graph, estimated_graph)
 
     AUC = roc_auc_score(true_graph.flatten(), estimated_graph.flatten())
 
-    return tpr, fdr, AUC
+    return tpr, fpr, AUC
+    # return tpr, fdr, AUC
 
 
 def compare_graphs_lag(true_graph, true_graph_lag, estimated_graph_lag):

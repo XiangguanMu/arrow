@@ -7,6 +7,7 @@ import torch.nn as nn
 import numpy as np
 from copy import deepcopy
 from benchmarks.ngc_model_helper import activation_helper
+import time
 
 
 class MLP(nn.Module):
@@ -15,7 +16,7 @@ class MLP(nn.Module):
         self.activation = activation_helper(activation)
 
         # Set up network.
-        lag_max = np.max(lag)
+        lag_max = np.max(lag)  # size of conv kernel
         layer = nn.Conv1d(num_series, hidden[0], lag_max+1)
         modules = [layer]
 
@@ -192,7 +193,16 @@ def train_model_ista(cmlp, X, use_raw, lr, max_iter, lam=0, lam_ridge=0, penalty
     ridge = sum([ridge_regularize(net, lam_ridge) for net in cmlp.networks])
     smooth = loss + ridge
 
+    epoch_100_times = []
+    iter_100 = 0
+
     for it in range(max_iter):
+        
+        if it % 100 == 0 and it / 100 == iter_100:
+            # print(f'it begin: {it}')
+            iter_100 += 1
+            epoch_100_time_start = time.perf_counter()
+
         # Take gradient step.
         smooth.backward()
         for param in cmlp.parameters():
@@ -214,6 +224,12 @@ def train_model_ista(cmlp, X, use_raw, lr, max_iter, lam=0, lam_ridge=0, penalty
                         for i in range(p)])
         ridge = sum([ridge_regularize(net, lam_ridge) for net in cmlp.networks])
         smooth = loss + ridge
+
+        if (it+1) % 100 == 0 and (it+1) / 100 == iter_100:
+            # print(f'it end: {it}')
+            epoch_100_time_end = time.perf_counter()
+            # print(epoch_100_time_end-epoch_100_time_start)
+            epoch_100_times.append(epoch_100_time_end-epoch_100_time_start)
 
         # Check progress.
         if (it + 1) % check_every == 0:
@@ -242,30 +258,38 @@ def train_model_ista(cmlp, X, use_raw, lr, max_iter, lam=0, lam_ridge=0, penalty
     # Restore best model.
     restore_parameters(cmlp, best_model)
 
-    return train_loss_list
+    return train_loss_list, epoch_100_times
 
 def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, use_cp=False):
     n_nodes = data.shape[1]
     if top_indices is not None:
         top_lags = np.zeros_like(nlags)
         top_lags[top_indices[:,0], top_indices[:,1]] = nlags[top_indices[:,0], top_indices[:,1]]
-    max_lag = int(data.shape[0]*0.1)
+    
     if use_cp:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         X = torch.tensor(data[np.newaxis], dtype=torch.float32, device=device)
         if use_raw:
+            max_lag = int(data.shape[0]*0.1)
             cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100]).cuda(device=device)
+            train_loss_list, epoch_100_times = train_model_ista(
+                cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=20000, check_every=100, verbose=False)
         else:
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100]).cuda(device=device)
+            train_loss_list, epoch_100_times = train_model_ista(
+                cmlp, X, use_raw=use_raw, lam=0.03, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=20000, check_every=100, verbose=False)
     else:
         X = torch.tensor(data[np.newaxis], dtype=torch.float32)
         if use_raw:
+            max_lag = int(data.shape[0]*0.1)
             cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100])
+            train_loss_list, epoch_100_times = train_model_ista(
+                cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=20000, check_every=100, verbose=False)
         else:
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100])
+            train_loss_list, epoch_100_times = train_model_ista(
+                cmlp, X, use_raw=use_raw, lam=0.03, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=20000, check_every=100, verbose=False)
     
-    train_loss_list = train_model_ista(
-        cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=5000, check_every=100, verbose=False)
     graph = cmlp.GC().cpu().data.numpy()
     if use_raw:
         lag_graph = np.zeros_like(graph).astype(int)
@@ -277,6 +301,6 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
             lag_i[np.max(GC_est_lag_i, axis=0) <= 0] = -1  # all weights = 0, no lag
             lag_graph[i] = lag_i+1  # index begins by 0, but lag begins by 1
         
-        return graph,lag_graph
+        return graph, lag_graph, epoch_100_times
     elif not use_raw:
-        return graph
+        return graph, epoch_100_times

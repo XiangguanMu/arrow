@@ -44,13 +44,13 @@ def pcmci(data, nlags=None, top_indices=None, use_raw=False, use_constant=False)
                     patch_selected_links[edge[0]].extend([
                         (edge[1], -nlags[edge[0], edge[1]])
                     ])
-            # # for the rest, use all lags to avoid missing
-            # for i in range(n_nodes):
-            #     if i not in patch_selected_links.keys():
-            #         patch_selected_links[i] = [(var, -lag)
-            #             for var in range(n_nodes)
-            #             for lag in range(t_min, t_max+1)
-            #         ]
+            # for the rest, use all lags to avoid missing
+            for i in range(n_nodes):
+                if i not in patch_selected_links.keys():
+                    patch_selected_links[i] = [(var, -lag)
+                        for var in range(n_nodes)
+                        for lag in range(t_min, t_max+1)
+                    ]
                 
             results = pcmci.run_pcmci(tau_min=t_min, tau_max=t_max, selected_links=patch_selected_links, pc_alpha=None)
             q_matrix = pcmci.get_corrected_pvalues(p_matrix=results["p_matrix"], fdr_method="fdr_bh")

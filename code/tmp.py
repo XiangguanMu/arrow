@@ -28,19 +28,15 @@ try:
 except FileNotFoundError:
     use_cp = False
     print("nvidia-smi command not found. NVIDIA driver might not be installed.")
-print(f'use_cp: {use_cp}')
 
 device = torch.device('cuda')
-
-device = torch.device('cuda')
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--lag", type=str, default='constant', choices=['constant','multiple'], help="lag mode: constant lag or multiple lags")
-parser.add_argument("--data", type=str, default='raw', choices=['raw', 'patched'], help="data mode: use raw data or patched data")
+parser.add_argument("--data", type=str, default='patched', choices=['raw', 'patched'], help="data mode: use raw data or patched data")
 parser.add_argument("--dataset", type=str, default='var', choices=['var', 'er'], help="dataset: {er, var}")
 parser.add_argument("--n", type=int, default=10, help="number of nodes")
-parser.add_argument("--model", type=str, default='ngc', choices=['pcmci', 'surd', 'ngc', 'varlingam'], help="{pcmci, surd, ngc, varlingam}")
+parser.add_argument("--model", type=str, default='pcmci', choices=['pcmci', 'surd', 'ngc', 'varlingam'], help="{pcmci, surd, ngc, varlingam}")
 # args = parser.parse_args(args=[])  # debug mode
 args = parser.parse_args()
 
@@ -84,6 +80,7 @@ lag_max = int(0.1*n_ts)  # to adjust
 
 print(f'====================Lag mode: {args.lag}, Data mode: {args.data}, Dataset: {args.dataset}, N:{args.n}, Method: {args.model}====================')
 
+# for lag_range in [5]:
 for lag_range in [1,3,5,7,9,15,20]:
     # lag[i][j] is the lag from j to i
     if args.lag == 'constant':
@@ -115,9 +112,14 @@ for lag_range in [1,3,5,7,9,15,20]:
             if args.model == 'surd':
                 graph = surd(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
             if args.model == 'ngc':
-                graph = ngc(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
+                graph, epoch_times = ngc(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
+                execute_times.extend(epoch_times)
+                perf.append(compare_graphs(GC, graph))
+                lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))
+                continue
             if args.model == 'varlingam':
                 graph = varlingam(data_bit, nlags, top_indices, use_raw=False, use_constant=args.lag=='constant')
+
             time_end = time.perf_counter()
             execute_times.append(time_end-time_start)
             perf.append(compare_graphs(GC, graph))
@@ -129,7 +131,11 @@ for lag_range in [1,3,5,7,9,15,20]:
             if args.model == 'surd':
                 graph, estimated_lag = surd(data, use_raw=True, use_constant=args.lag=='constant', use_cp=use_cp)
             if args.model == 'ngc':
-                graph, estimated_lag = ngc(data, use_raw=True, use_constant=args.lag=='constant', use_cp=use_cp)          
+                graph, estimated_lag, epoch_times = ngc(data, use_raw=True, use_constant=args.lag=='constant', use_cp=use_cp)
+                execute_times.extend(epoch_times)
+                perf.append(compare_graphs(GC, graph))
+                lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))
+                continue     
             if args.model == 'varlingam':
                 graph, estimated_lag = varlingam(data, use_raw=True, use_constant=args.lag=='constant')
             time_end = time.perf_counter()
@@ -142,8 +148,9 @@ for lag_range in [1,3,5,7,9,15,20]:
 
     print("Means and standard deviations for TPR, FPR and AUC with lag range in ", lag_range, "time interval")
     print(np.mean(np.reshape(perf, (-1, 3)), axis=0), np.std(np.reshape(perf, (-1, 3)), axis=0))
-    if len(lag_perf)>0:
-        print("Means and standard deviations for lag TPR, FPR and AUC with lag range in ", lag_range, "time interval")
-        print(np.mean(np.reshape(lag_perf, (-1, 3)), axis=0), np.std(np.reshape(lag_perf, (-1, 3)), axis=0))
+
+    print("Means and standard deviations for lag TPR, FPR and AUC with lag range in ", lag_range, "time interval")
+    print(np.mean(np.reshape(lag_perf, (-1, 3)), axis=0), np.std(np.reshape(lag_perf, (-1, 3)), axis=0))
+
     print("Means and standard deviations for execution time with lag range in ", lag_range, "time interval")
     print(np.mean(execute_times), np.std(execute_times))

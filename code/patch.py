@@ -55,7 +55,7 @@ def estimate_lags(data, patch_size, lag, lag_max):
                 signs_1[dt][i][j] = correlated_signs.count(1)/len(correlated_signs)
                 signs_2[dt][i][j] = correlated_signs.count(2)/len(correlated_signs)
     
-        signs = np.maximum(signs_0, signs_2)
+    signs = np.maximum(signs_0, signs_2)
         
     # (n_nodes, n_nodes, lag_max)
     candidate = np.transpose(signs, (1,2,0))
