@@ -273,7 +273,7 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
             max_lag = int(data.shape[0]*0.1)
             cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100]).cuda(device=device)
             train_loss_list, epoch_100_times = train_model_ista(
-                cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=20000, check_every=100, verbose=False)
+                cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=20000, check_every=100, verbose=False)
         else:
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100]).cuda(device=device)
             train_loss_list, epoch_100_times = train_model_ista(
@@ -284,7 +284,7 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
             max_lag = int(data.shape[0]*0.1)
             cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100])
             train_loss_list, epoch_100_times = train_model_ista(
-                cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=20000, check_every=100, verbose=False)
+                cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=20000, check_every=100, verbose=False)
         else:
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100])
             train_loss_list, epoch_100_times = train_model_ista(

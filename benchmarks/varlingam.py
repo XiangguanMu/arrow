@@ -10,7 +10,7 @@ def varlingam(data, nlags=None, top_indices=None, use_raw=False, use_constant=Fa
     n_ts, n_nodes = data.shape
     lag_max = int(0.1*n_ts)
     if use_raw:
-        model = lingam.VARLiNGAM(lags=80, criterion='bic', prune=True)
+        model = lingam.VARLiNGAM(lags=85, criterion='bic', prune=True)
         # model = lingam.VARLiNGAM(lags=lag_max, criterion='bic', prune=True)  # error
         model.fit(data)
         weighted_graph = np.sum(model.adjacency_matrices_, axis=0)/model.adjacency_matrices_.shape[0]

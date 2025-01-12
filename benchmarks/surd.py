@@ -21,7 +21,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 # data_bit/data, nlags, top_indices
-def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use_cp=False):
+def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use_cp=False, pruned=True):
     n_ts, n_nodes = X.shape
     X = X.T  # n_nodes, n_ts
     nbins = 4 # 00->0 01->1 10->2 11->3, 4 bins
@@ -34,8 +34,10 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
             ti_max = np.max(lags)
             preserved_ids = np.append(np.array([i,i]), np.argwhere(lags>0).flatten())
             # pruned Y
-            Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in preserved_ids[1:]]])
-            # Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in range(n_nodes)]])
+            if pruned:
+                Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in preserved_ids[1:]]])
+            else:
+                Y = np.vstack([X[i,ti_max:], [X[j, ti_max-lags[j]:n_ts-lags[j]] for j in range(n_nodes)]])
             if use_cp:
                 Y_gpu = cp.asarray(Y)
                 hist_gpu, _gpu = cp.histogramdd(Y_gpu.T, bins=nbins)
@@ -51,10 +53,12 @@ def surd(X, nlags=None, top_indices=None, use_raw=False, use_constant=False, use
             for data in [I_U, I_S]:
                 keys = [k for k, v in data.items() if v > 0.1]
                 if len(keys)>0:
-                    # indices = np.concatenate(keys) - 1
-                    # graph[i, indices] = 1
-                    preserved_indices = preserved_ids[np.concatenate(keys) - 1]
-                    graph[i, preserved_ids] = 1
+                    if not pruned:
+                        indices = np.concatenate(keys) - 1
+                        graph[i, indices] = 1
+                    else:  # pruned as default
+                        preserved_indices = preserved_ids[np.concatenate(keys) - 1]
+                        graph[i, preserved_ids] = 1
         return graph
             
             
