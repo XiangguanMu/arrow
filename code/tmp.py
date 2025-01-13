@@ -8,7 +8,7 @@ from patch import estimate_lags
 from tqdm import *
 import time
 import argparse
-from utils.synthetic import simulate_er, compare_graphs, compare_graphs_lag, simulate_var
+from utils.synthetic import simulate_linear, simulate_nonlinear, compare_graphs, compare_graphs_lag
 from benchmarks.pcmci import pcmci
 from benchmarks.surd import surd
 from benchmarks.cmlp import ngc
@@ -34,7 +34,7 @@ device = torch.device('cuda')
 parser = argparse.ArgumentParser()
 parser.add_argument("--lag", type=str, default='constant', choices=['constant','multiple'], help="lag mode: constant lag or multiple lags")
 parser.add_argument("--data", type=str, default='patched', choices=['raw', 'patched'], help="data mode: use raw data or patched data")
-parser.add_argument("--dataset", type=str, default='var', choices=['var', 'er'], help="dataset: {er, var}")
+parser.add_argument("--dataset", type=str, default='linear', choices=['linear', 'nonlinear'], help="dataset: {linear, nonlinear}")
 parser.add_argument("--n", type=int, default=10, help="number of nodes")
 parser.add_argument("--model", type=str, default='pcmci', choices=['pcmci', 'surd', 'ngc', 'varlingam'], help="{pcmci, surd, ngc, varlingam}")
 # args = parser.parse_args(args=[])  # debug mode
@@ -95,10 +95,11 @@ for lag_range in [1,3,5,7,9,15,20]:
     execute_times = []
     for i in trange(10):
         seed = np.random.SeedSequence().generate_state(1)[0]
-        if args.dataset == 'er':
-            data, beta, GC = simulate_er(p=n_nodes, T=n_ts, lag=lag, seed=seed)
-        elif args.dataset == 'var':
-            data, beta, GC = simulate_var(p=n_nodes, T=n_ts, lag=lag, seed=seed)
+        if args.dataset == 'nonlinear':
+            data, beta, GC = simulate_nonlinear(p=n_nodes, T=n_ts, lag=lag, seed=seed)
+        elif args.dataset == 'linear':
+            data, beta, GC = simulate_linear(p=n_nodes, T=n_ts, lag=lag, seed=seed)
+        # print('====GC====\n', GC)
         GC_lag = GC*lag
         time_start = time.perf_counter()
         graph = None
@@ -112,7 +113,7 @@ for lag_range in [1,3,5,7,9,15,20]:
             if args.model == 'surd':
                 graph = surd(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
             if args.model == 'ngc':
-                graph, epoch_times = ngc(data, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
+                graph, epoch_times = ngc(data, nlags, top_indices, use_raw=False, use_constant=args.lag=='constant', use_linear=args.dataset=='linear', use_cp=use_cp)
                 # graph, epoch_times = ngc(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
                 execute_times.extend(epoch_times)
                 perf.append(compare_graphs(GC, graph))
@@ -132,7 +133,7 @@ for lag_range in [1,3,5,7,9,15,20]:
             if args.model == 'surd':
                 graph, estimated_lag = surd(data, use_raw=True, use_constant=args.lag=='constant', use_cp=use_cp)
             if args.model == 'ngc':
-                graph, estimated_lag, epoch_times = ngc(data, use_raw=True, use_constant=args.lag=='constant', use_cp=use_cp)
+                graph, estimated_lag, epoch_times = ngc(data, use_raw=True, use_constant=args.lag=='constant', use_linear=args.dataset=='linear', use_cp=use_cp)
                 execute_times.extend(epoch_times)
                 perf.append(compare_graphs(GC, graph))
                 lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))
@@ -143,8 +144,7 @@ for lag_range in [1,3,5,7,9,15,20]:
             perf.append(compare_graphs(GC, graph))
             execute_times.append(time_end-time_start)
             if estimated_lag is not None:
-                lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))
-        
+                lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))        
         save_results(graph, estimated_lag, GC, GC_lag, i, lag_range)
 
     print("Means and standard deviations for TPR, FPR and AUC with lag range in ", lag_range, "time interval")

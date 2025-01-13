@@ -260,7 +260,7 @@ def train_model_ista(cmlp, X, use_raw, lr, max_iter, lam=0, lam_ridge=0, penalty
 
     return train_loss_list, epoch_100_times
 
-def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, use_cp=False):
+def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, use_linear=False, use_cp=False):
     n_nodes = data.shape[1]
     if top_indices is not None:
         top_lags = np.zeros_like(nlags)
@@ -269,15 +269,20 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
     if use_cp:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         X = torch.tensor(data[np.newaxis], dtype=torch.float32, device=device)
+        # select optimal param settings for each case
         if use_raw:
             max_lag = int(data.shape[0]*0.1)
             cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100]).cuda(device=device)
             train_loss_list, epoch_100_times = train_model_ista(
-                cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=20000, check_every=100, verbose=False)
-        else:
+                cmlp, X, use_raw=use_raw, lam=0.004, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=10000, check_every=100, verbose=False)
+        elif use_linear and not use_raw:  # linear + patched
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100]).cuda(device=device)
             train_loss_list, epoch_100_times = train_model_ista(
                 cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=20000, check_every=100, verbose=False)
+        # elif not use_linear and not use_raw: # non-linear + patched
+        #     cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100]).cuda(device=device)
+        #     train_loss_list, epoch_100_times = train_model_ista(
+        #         cmlp, X, use_raw=use_raw, lam=0.01, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=4000, check_every=100, verbose=True)
     else:
         X = torch.tensor(data[np.newaxis], dtype=torch.float32)
         if use_raw:
@@ -285,13 +290,13 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
             cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100])
             train_loss_list, epoch_100_times = train_model_ista(
                 cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=20000, check_every=100, verbose=False)
-        else:
+        elif use_linear and not use_raw:  # linear + patched
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100])
             train_loss_list, epoch_100_times = train_model_ista(
                 cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=20000, check_every=100, verbose=False)
     
     graph = cmlp.GC().cpu().data.numpy()
-    # print(graph)
+    print(graph)
     if use_raw:
         lag_graph = np.zeros_like(graph).astype(int)
         for i in range(n_nodes):

@@ -58,7 +58,7 @@ def function(name):
 
 
 # avoid infinite growing or decaying of the results
-def make_var_stationary(beta, radius=0.97):
+def make_linear_stationary(beta, radius=0.97):
     '''Rescale coefficients of VAR model to make stable.'''
     p = beta.shape[0]
     lag = beta.shape[1] // p
@@ -68,45 +68,12 @@ def make_var_stationary(beta, radius=0.97):
     max_eig = max(np.abs(eigvals))
     nonstationary = max_eig > radius
     if nonstationary:
-        return make_var_stationary(0.95 * beta, radius)  # decrease beta recursively
+        return make_linear_stationary(0.95 * beta, radius)  # decrease beta recursively
     else:
         return beta
 
 
-# def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=1e-4, seed=0):
-#     if seed is not None:
-#         np.random.seed(seed)
-
-#     # Set up coefficients and Granger causality ground truth.
-#     GC = np.eye(p, dtype=int)  # diagonal matrix
-#     # GC = np.zeros((p,p), dtype=int)  # diagonal matrix
-#     beta = np.eye(p) * beta_value  # diagonal matrix too
-#     # beta = np.zeros((p,p))  # diagonal matrix too
-
-#     # num_nonzero = 1
-#     num_nonzero = int(p * sparsity) - 1
-#     for i in range(p):
-#         choice = np.random.choice(p - 1, size=num_nonzero, replace=False)
-#         choice[choice >= i] += 1
-#         beta[i, choice] = beta_value
-#         GC[i, choice] = 1
-
-#     beta = np.hstack([beta for _ in range(lag)])
-#     beta = make_var_stationary(beta)
-
-#     # Generate data.
-#     burn_in = 100
-#     errors = np.random.normal(scale=sd, size=(p, T + burn_in))
-#     X = np.zeros((p, T + burn_in))
-#     X[:, :lag] = errors[:, :lag]
-#     for t in range(lag, T + burn_in):
-#         X[:, t] = np.dot(beta, X[:, (t-lag):t].flatten(order='F'))
-#         X[:, t] += errors[:, t-1]
-
-#     return X.T[burn_in:], beta, GC
-
-
-def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=0.1, seed=0):
+def simulate_linear(p, T, lag, sparsity=0.2, beta_value=1.0, sd=0.1, seed=0):
     if seed is not None:
         np.random.seed(seed)
 
@@ -123,7 +90,7 @@ def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=0.1, seed=0):
         GC[i, choice] = 1
 
     # beta = np.hstack([beta for _ in range(lag)])
-    beta = make_var_stationary(beta)
+    beta = make_linear_stationary(beta)
 
     # Generate data.
     burn_in = 100
@@ -144,14 +111,14 @@ def simulate_var(p, T, lag, sparsity=0.2, beta_value=1.0, sd=0.1, seed=0):
     return X.T[burn_in:], beta, GC
 
 
-def simulate_er(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0):
+def simulate_nonlinear(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0):
     if seed is not None:
         np.random.seed(seed)
 
     # Set up coefficients and Granger causality ground truth.
     GC = erdos_renyi(p, sparsity)
 
-    beta = make_var_stationary(GC)
+    beta = make_linear_stationary(GC)
 
     # Generate data.
     burn_in = 100
@@ -171,83 +138,6 @@ def simulate_er(p, T, lag, sparsity=0.4, beta_value=1.0, sd=1e-4, seed=0):
 
 
     return X.T[burn_in:], beta, GC
-
-
-
-def lorenz(x, t, F):
-    '''Partial derivatives for Lorenz-96 ODE.'''
-    p = len(x)
-    dxdt = np.zeros(p)
-    dxdt = [(x[(i+1) % p] - x[(i-2) % p]) * x[(i-1) % p] - x[i] + F for i in range(p)]
-
-    return dxdt
-    
-
-def simulate_lorenz_96(p, T, F=10.0, delta_t=0.1, sd=0.01, burn_in=100,
-                       seed=0):
-    if seed is not None:
-        np.random.seed(seed)
-
-    # Use scipy to solve ODE.
-    x0 = np.random.normal(scale=0.01, size=p)
-    t = np.linspace(0, (T + burn_in) * delta_t, T + burn_in)
-    X = odeint(lorenz, x0, t, args=(F,))
-    X += np.random.normal(scale=sd, size=(T + burn_in, p))
-
-    # Set up Granger causality ground truth.
-    GC = np.zeros((p, p), dtype=int)
-    for i in range(p):
-        GC[i, i] = 1
-        GC[i, (i + 1) % p] = 1
-        GC[i, (i - 1) % p] = 1
-        GC[i, (i - 2) % p] = 1
-
-    return X[burn_in:], GC
-
-delay_buffer = None
-
-def lorenz_with_delay(x, t, F, delay_buffer, delay_steps, delta_t):
-    '''Partial derivatives for Lorenz-96 ODE with time delay.'''
-    p = len(x)
-    dxdt = np.zeros(p)
-
-    delayed_x = delay_buffer[delay_steps]
-
-    dxdt = [(delayed_x[(i+1)%p]-delayed_x[(i-2)%p])*delayed_x[(i-1)%p]-delayed_x[i]+F for i in range(p)]
-
-    return np.array(dxdt)
-
-def simulate_lorenz_96_with_delay(p, T, F=10.0, delta_t=1e-3, sd=0.01, burn_in=100, delay_time=1.0, seed=0):
-    if seed is not None:
-        np.random.seed(seed)
-    x0 = np.random.normal(scale=0.01, size=p)
-    t = np.linspace(0, (T + burn_in) * delta_t, T + burn_in)
-    delay_steps = int(delay_time / delta_t)
-    delay_buffer = [x0.copy()]
-    for _ in range(delay_steps):
-        delay_buffer.append(np.random.normal(scale=0.01, size=p))
-
-    def custom_ode_solver(f, x0, t, args):
-        nonlocal delay_buffer
-        result = [x0.copy()]
-        for i in range(1, len(t)):
-            current_x = result[-1]
-            dxdt = f(current_x, t[i], *args, delay_buffer, delay_steps, delta_t)
-            new_x = current_x + 1e-3 * dxdt * (t[i] - t[i - 1])  # 使用欧拉法（不收敛）
-            result.append(new_x)
-            delay_buffer = [new_x] + delay_buffer[:-1]
-        return np.array(result)
-
-    X = custom_ode_solver(lorenz_with_delay, x0, t, args=(F,))
-    X += np.random.normal(scale=sd, size=X.shape)
-    GC = np.zeros((p, p), dtype=int)
-    for i in range(p):
-        GC[i, i] = 1
-        GC[i, (i + 1) % p] = 1
-        GC[i, (i - 1) % p] = 1
-        GC[i, (i - 2) % p] = 1
-
-    return X[burn_in:], GC
 
 
 def compare_graphs(true_graph, estimated_graph):
