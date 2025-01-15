@@ -81,7 +81,7 @@ lag_max = int(0.1*n_ts)  # to adjust
 print(f'====================Lag mode: {args.lag}, Data mode: {args.data}, Dataset: {args.dataset}, N:{args.n}, Method: {args.model}====================')
 
 # for lag_range in [5]:
-for lag_range in [1,3,5,7,9,15,20]:
+for lag_range in [3,5,7,9,15,20]:
     # lag[i][j] is the lag from j to i
     if args.lag == 'constant':
         lag = np.ones((n_nodes,n_nodes), dtype=int)*lag_range
