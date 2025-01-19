@@ -13,7 +13,6 @@ from benchmarks.pcmci import pcmci
 from benchmarks.surd import surd
 from benchmarks.cmlp import ngc
 from benchmarks.varlingam import varlingam
-# import matplotlib.pyplot as plt
 
 use_cp = False
 
@@ -41,7 +40,7 @@ parser.add_argument("--model", type=str, default='pcmci', choices=['pcmci', 'sur
 args = parser.parse_args()
 
 
-def save_results(graph, estimate_lag, GC, GC_lag, i, lag_range):
+def save_results(graph, estimate_lag, GC, GC_lag, duration, i, lag_range):
     path_dir = f'../results/nps/{args.model}_{args.lag}_{args.data}_{n_nodes}_{lag_range}/'
     if not os.path.exists(path_dir):
         os.makedirs(path_dir)
@@ -69,18 +68,23 @@ def save_results(graph, estimate_lag, GC, GC_lag, i, lag_range):
         os.makedirs(GC_lag_dir)
     if GC_lag is not None:
         np.save(GC_lag_dir+f'{i}.npy', GC_lag)
+
+    duration_dir = path_dir+'duration/'
+    if not os.path.exists(duration_dir):
+        os.makedirs(duration_dir)
+    if duration is not None:
+        np.save(duration_dir+f'{i}.npy', duration)
     
-    # print('Results saved in ', path_dir, 'round ', i)
+    print('Results saved in ', path_dir, 'round ', i)
 
 # (n_ts, n_node)
 n_nodes = args.n
 n_ts = 1000
 patch_size = 3
-lag_max = int(0.1*n_ts)  # to adjust
+lag_max = int(0.1*n_ts)
 
 print(f'====================Lag mode: {args.lag}, Data mode: {args.data}, Dataset: {args.dataset}, N:{args.n}, Method: {args.model}====================')
 
-# for lag_range in [5]:
 for lag_range in [3,5,7,9,15,20]:
     # lag[i][j] is the lag from j to i
     if args.lag == 'constant':
@@ -89,17 +93,15 @@ for lag_range in [3,5,7,9,15,20]:
         if lag_range == 1:  # same as constant test
             continue
         lag = np.random.randint(1, lag_range+1, size=(n_nodes,n_nodes), dtype=int)
-    # print(lag)
     perf = []
     lag_perf = []
     execute_times = []
-    for i in trange(10):
+    for i in trange(5):
         seed = np.random.SeedSequence().generate_state(1)[0]
         if args.dataset == 'nonlinear':
             data, beta, GC = simulate_nonlinear(p=n_nodes, T=n_ts, lag=lag, seed=seed)
         elif args.dataset == 'linear':
             data, beta, GC = simulate_linear(p=n_nodes, T=n_ts, lag=lag, seed=seed)
-        # print('====GC====\n', GC)
         GC_lag = GC*lag
         time_start = time.perf_counter()
         graph = None
@@ -114,7 +116,6 @@ for lag_range in [3,5,7,9,15,20]:
                 graph = surd(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
             if args.model == 'ngc':
                 graph, epoch_times = ngc(data, nlags, top_indices, use_raw=False, use_constant=args.lag=='constant', use_linear=args.dataset=='linear', use_cp=use_cp)
-                # graph, epoch_times = ngc(data_bit, nlags, top_indices,use_raw=False, use_constant=args.lag=='constant', use_cp=use_cp)
                 execute_times.extend(epoch_times)
                 perf.append(compare_graphs(GC, graph))
                 lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))
@@ -137,6 +138,8 @@ for lag_range in [3,5,7,9,15,20]:
                 execute_times.extend(epoch_times)
                 perf.append(compare_graphs(GC, graph))
                 lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))
+                time_end = time.perf_counter()
+                save_results(graph, estimated_lag, GC, GC_lag, time_end-time_start, i, lag_range)
                 continue     
             if args.model == 'varlingam':
                 graph, estimated_lag = varlingam(data, use_raw=True, use_constant=args.lag=='constant')
@@ -145,7 +148,7 @@ for lag_range in [3,5,7,9,15,20]:
             execute_times.append(time_end-time_start)
             if estimated_lag is not None:
                 lag_perf.append(compare_graphs_lag(GC, GC_lag, estimated_lag))        
-        save_results(graph, estimated_lag, GC, GC_lag, i, lag_range)
+        save_results(graph, estimated_lag, GC, GC_lag, time_end-time_start, i, lag_range)
 
     print("Means and standard deviations for TPR, FPR and AUC with lag range in ", lag_range, "time interval")
     print(np.mean(np.reshape(perf, (-1, 3)), axis=0), np.std(np.reshape(perf, (-1, 3)), axis=0))

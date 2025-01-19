@@ -280,6 +280,11 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
             cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100]).cuda(device=device)
             train_loss_list, epoch_100_times = train_model_ista(
                 cmlp, X, use_raw=use_raw, lam=0.001, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=8000, check_every=100, verbose=False)
+        elif use_raw: # dream3, non-linear
+            max_lag = int(data.shape[0]*0.1)
+            cmlp = cMLP(n_nodes, lag=max_lag, hidden=[100]).cuda(device=device)
+            train_loss_list, epoch_100_times = train_model_ista(
+                cmlp, X, use_raw=use_raw, lam=0.01, lam_ridge=1e-2, lr=5e-2, penalty='H', max_iter=1500, check_every=100, verbose=False)
         elif use_linear and not use_raw:  # linear + patched
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100]).cuda(device=device)
             train_loss_list, epoch_100_times = train_model_ista(
@@ -287,7 +292,7 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
         elif not use_linear and not use_raw: # non-linear + patched
             cmlp = cMLP(n_nodes, lag=top_lags, hidden=[100]).cuda(device=device)
             train_loss_list, epoch_100_times = train_model_ista(
-                cmlp, X, use_raw=use_raw, lam=0.01, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=4000, check_every=100, verbose=True)
+                cmlp, X, use_raw=use_raw, lam=0.01, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=5000, check_every=100, verbose=False)
     else:
         X = torch.tensor(data[np.newaxis], dtype=torch.float32)
         if use_raw:
@@ -301,7 +306,6 @@ def ngc(data, nlags=None, top_indices=None, use_raw=False, use_constant=False, u
                 cmlp, X, use_raw=use_raw, lam=0.002, lam_ridge=1e-2, lr=5e-2, penalty='GL', max_iter=20000, check_every=100, verbose=False)
     
     graph = cmlp.GC().cpu().data.numpy()
-    print(graph)
     if use_raw:
         lag_graph = np.zeros_like(graph).astype(int)
         for i in range(n_nodes):

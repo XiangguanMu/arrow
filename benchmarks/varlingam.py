@@ -8,11 +8,16 @@ from causallearn.search.FCMBased import lingam
 
 def varlingam(data, nlags=None, top_indices=None, use_raw=False, use_constant=False):
     n_ts, n_nodes = data.shape
-    lag_max = int(0.1*n_ts)
+    # lag_max = int(0.1*n_ts)  # error
+    lag_max = int(0.085*n_ts)
+    print(lag_max)
     if use_raw:
-        model = lingam.VARLiNGAM(lags=85, criterion='bic', prune=True)
-        # model = lingam.VARLiNGAM(lags=lag_max, criterion='bic', prune=True)  # error
+        # model = lingam.VARLiNGAM(lags=11, criterion='bic', prune=True)  # for net-sim test
+        # model = lingam.VARLiNGAM(lags=lag_max-1, criterion='bic', prune=True)  # for dream3 test
+        model = lingam.VARLiNGAM(lags=lag_max, criterion=None, prune=False)
+        # model = lingam.VARLiNGAM(lags=lag_max, criterion='bic', prune=True)
         model.fit(data)
+        print(model.adjacency_matrices_.shape)
         weighted_graph = np.sum(model.adjacency_matrices_, axis=0)/model.adjacency_matrices_.shape[0]
         graph = np.where(weighted_graph, 1, 0)
         # lag_graph: contribute most to graph

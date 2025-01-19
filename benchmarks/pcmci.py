@@ -1,8 +1,13 @@
+import os
+import sys
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+tig_pth = os.path.join(cur_dir, 'tigramite')
+sys.path.append(tig_pth)
 import numpy as np
 
-import tigramite.data_processing as pp
-from tigramite.independence_tests import ParCorr
-from tigramite.pcmci import PCMCI
+import data_processing as pp
+from independence_tests import ParCorr
+from pcmci import PCMCI
 
 
 def pcmci(data, nlags=None, top_indices=None, use_raw=False, use_constant=False):
